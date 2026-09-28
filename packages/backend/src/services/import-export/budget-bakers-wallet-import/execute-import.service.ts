@@ -15,6 +15,7 @@ import { Money } from '@common/types/money';
 import { ValidationError } from '@js/errors';
 import { logger } from '@js/utils/logger';
 import * as Accounts from '@models/accounts.model';
+import * as Users from '@models/users.model';
 import { addUserCurrencies } from '@services/currencies/add-user-currency';
 import { partitionReconcileAccounts } from '@services/import-export/core/partition-reconcile-accounts';
 import { startBalanceReconciliation } from '@services/import-export/core/reconcile-account-balances';
@@ -282,6 +283,7 @@ export async function executeBudgetBakersWalletImport({
 
   // Phase 5: transactions (ordinary rows + unpaired transfer legs). Rows the
   // user confirmed as duplicates are counted and skipped without a tick.
+  const defaultCategoryId = await Users.getUserDefaultCategory({ id: userId });
   for (const tx of importableTransactions) {
     if (skipSet.has(tx.rowIndex)) {
       summary.duplicatesSkipped += 1;
@@ -300,9 +302,9 @@ export async function executeBudgetBakersWalletImport({
       // Out-of-wallet legs carry no real category and model money leaving/entering
       // the tracked set of accounts, so they import as `transfer_out_wallet` with
       // no destination account and no category. Ordinary rows resolve their
-      // category through the mapping; an unmapped name yields undefined (no
-      // category), matching CSV behaviour.
-      const categoryId = !tx.outOfWallet && tx.categoryName ? categoryNameToId.get(tx.categoryName) : undefined;
+      // category through the mapping and fall back to the default category.
+      const mappedCategoryId = !tx.outOfWallet && tx.categoryName ? categoryNameToId.get(tx.categoryName) : undefined;
+      const categoryId = tx.outOfWallet ? undefined : (mappedCategoryId ?? defaultCategoryId);
       // A row can carry several comma-separated Wallet labels; attach every one.
       // Any name without a resolved id (should not happen — all parsed tags are
       // created in Phase 4) is dropped; an empty result becomes undefined so the
@@ -340,7 +342,7 @@ export async function executeBudgetBakersWalletImport({
         // A category from the mapped Wallet column is authoritative and beats a
         // linked Payee's enforce/hint default. Inert when the row has no mapped
         // category, so Payee categorization still runs then.
-        categoryIdIsExplicit: categoryId != null,
+        categoryIdIsExplicit: mappedCategoryId != null,
         matchPlanned: plannedMatchAccountIds.has(accountId),
       });
       const [transaction] = createResult;

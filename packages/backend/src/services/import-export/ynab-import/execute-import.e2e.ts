@@ -64,6 +64,9 @@ describe('Execute YNAB import endpoint', () => {
     expect(salary).toBeDefined();
     expect(salary!.transactionType).toBe('income');
     expect(Number(salary!.amount)).toBe(3200);
+    // "Inflow: Ready to Assign" is not imported as a category.
+    const { defaultCategoryId } = await helpers.getUserInfo({ raw: true });
+    expect(salary!.categoryId).toBe(defaultCategoryId);
 
     const electric = transactionsAfter.find((t) => t.note === 'Electric bill');
     expect(electric).toBeDefined();

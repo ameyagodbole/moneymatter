@@ -14,6 +14,7 @@ import { Money } from '@common/types/money';
 import { ValidationError } from '@js/errors';
 import { logger } from '@js/utils/logger';
 import Payees from '@models/payees.model';
+import * as Users from '@models/users.model';
 import { addUserCurrencies } from '@services/currencies/add-user-currency';
 import { normalizePayeeName } from '@services/payees/normalize-name';
 import { createPayee } from '@services/payees/payees.service';
@@ -216,6 +217,7 @@ export async function executeYnabImport({
   };
 
   // Phase 6: transactions.
+  const defaultCategoryId = await Users.getUserDefaultCategory({ id: userId });
   for (const tx of transactionsToWrite) {
     try {
       const accountId = accountIdByName.get(tx.accountName);
@@ -225,7 +227,7 @@ export async function executeYnabImport({
       const transactionType = isExpense ? TRANSACTION_TYPES.expense : TRANSACTION_TYPES.income;
       const amount = Money.fromDecimal(Math.abs(tx.amount));
 
-      const categoryId =
+      const mappedCategoryId =
         tx.categoryGroup && tx.categoryName
           ? categoryByFullName.get(`${tx.categoryGroup}: ${tx.categoryName}`)
           : undefined;
@@ -243,8 +245,8 @@ export async function executeYnabImport({
         paymentType: PAYMENT_TYPES.creditCard,
         accountType: ACCOUNT_TYPES.system,
         transferNature: TRANSACTION_TRANSFER_NATURE.not_transfer,
-        categoryId,
-        categoryIdIsExplicit: categoryId != null,
+        categoryId: mappedCategoryId ?? defaultCategoryId,
+        categoryIdIsExplicit: mappedCategoryId != null,
         payeeId,
         tagIds,
         externalData: { importDetails },

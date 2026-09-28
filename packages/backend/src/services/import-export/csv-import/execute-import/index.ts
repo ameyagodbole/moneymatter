@@ -9,6 +9,7 @@ import type {
 } from '@bt/shared/types';
 import {
   ACCOUNT_TYPES,
+  CATEGORIZATION_TRIGGER,
   ImportSource,
   PAYMENT_TYPES,
   TRANSACTION_TRANSFER_NATURE,
@@ -19,6 +20,8 @@ import { ValidationError } from '@js/errors';
 import { logger } from '@js/utils/logger';
 import { trackImportCompleted } from '@js/utils/posthog';
 import * as Accounts from '@models/accounts.model';
+import * as Users from '@models/users.model';
+import { CATEGORIZATION_SCOPE, queueCategorizationJob } from '@services/ai-categorization';
 import { addUserCurrencies } from '@services/currencies/add-user-currency';
 import { partitionReconcileAccounts } from '@services/import-export/core/partition-reconcile-accounts';
 import { startBalanceReconciliation } from '@services/import-export/core/reconcile-account-balances';
@@ -256,7 +259,9 @@ export async function executeImport({
   // Create transactions
   const errors: ImportError[] = [];
   const newTransactionIds: string[] = [];
+  const uncategorizedTransactionIds: string[] = [];
   let mergedCount = 0;
+  const userDefaultCategoryId = await Users.getUserDefaultCategory({ id: userId });
 
   let processedCount = 0;
   const tick = async () => {
@@ -290,7 +295,7 @@ export async function executeImport({
       // so a Payee rule may still categorize it — hence the flag keys off
       // `mappedCategoryId`, not `categoryId`.
       const mappedCategoryId = row.categoryName ? categoryNameToId.get(row.categoryName) : undefined;
-      const categoryId = mappedCategoryId ?? defaultCategoryId;
+      const categoryId = mappedCategoryId ?? defaultCategoryId ?? userDefaultCategoryId;
 
       // Payee resolved up front; passed explicitly so createTransaction links it
       // instead of re-extracting from `rawMerchantName`. `payeeLocked` stays at
@@ -368,6 +373,7 @@ export async function executeImport({
           mergedCount += 1;
         } else {
           newTransactionIds.push(transaction.id);
+          if (!mappedCategoryId && !defaultCategoryId) uncategorizedTransactionIds.push(transaction.id);
 
           // Union step: when the row supplied its own tags, createTransaction did
           // not apply the payee's default tags (the explicit tagIds short-circuit
@@ -447,6 +453,15 @@ export async function executeImport({
       userId,
       importType: 'csv',
       transactionsCount: newTransactionIds.length,
+    });
+  }
+
+  if (uncategorizedTransactionIds.length > 0) {
+    await queueCategorizationJob({
+      userId,
+      transactionIds: uncategorizedTransactionIds,
+      scope: CATEGORIZATION_SCOPE.defaultCategoryOnly,
+      trigger: CATEGORIZATION_TRIGGER.import,
     });
   }
 

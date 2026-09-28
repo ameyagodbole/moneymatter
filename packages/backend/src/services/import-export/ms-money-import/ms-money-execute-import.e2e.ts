@@ -208,10 +208,11 @@ describeWithFixture('Microsoft Money import execution', () => {
     expect(linkedCategoryRows.every((t) => t.categoryId === existingCategory.id)).toBe(true);
     expect(categories.filter((c) => c.name === existingCategory.name)).toHaveLength(1);
 
-    // --- A category left out of the mapping imports its rows bare ---
+    // --- A category left out of the mapping imports its rows into the default category ---
+    const { defaultCategoryId } = await helpers.getUserInfo({ raw: true });
     const unmappedCategoryRows = transactions.filter((t) => Number(t.amount) === CATEGORY_OMITTED_AMOUNT);
     expect(unmappedCategoryRows).toHaveLength(CATEGORY_OMITTED_ROWS);
-    expect(unmappedCategoryRows.filter((t) => t.categoryId != null)).toEqual([]);
+    expect(unmappedCategoryRows.every((t) => t.categoryId === defaultCategoryId)).toBe(true);
     expect(categories.filter((c) => c.name === CATEGORY_OMITTED_LEAF_NAME)).toHaveLength(0);
 
     // --- The out-of-wallet leg has no counterpart account ---

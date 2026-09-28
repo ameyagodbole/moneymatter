@@ -2,6 +2,7 @@ import {
   ACCOUNT_CATEGORIES,
   ACCOUNT_TYPES,
   type AccountBalanceChange,
+  CATEGORIZATION_TRIGGER,
   ImportSource,
   type OfxAccountMapping,
   type OfxImportSummary,
@@ -15,6 +16,8 @@ import { UnexpectedError, ValidationError } from '@js/errors';
 import { logger } from '@js/utils/logger';
 import * as Accounts from '@models/accounts.model';
 import * as Transactions from '@models/transactions.model';
+import * as Users from '@models/users.model';
+import { CATEGORIZATION_SCOPE, queueCategorizationJob } from '@services/ai-categorization';
 import { addUserCurrencies } from '@services/currencies/add-user-currency';
 import { partitionReconcileAccounts } from '@services/import-export/core/partition-reconcile-accounts';
 import { startBalanceReconciliation } from '@services/import-export/core/reconcile-account-balances';
@@ -169,6 +172,7 @@ export async function executeOfxImport({
   );
   const { payeeNameToId, payeesCreated } = await createPayeesIfNeeded({ userId, payeeNames });
   summary.payeesCreated = payeesCreated;
+  const defaultCategoryId = await Users.getUserDefaultCategory({ id: userId });
 
   const originalIds = rowsToWrite.map((tx) => tx.sourceTransactionKey).filter((id): id is string => Boolean(id));
   const existingIdRows =
@@ -206,6 +210,7 @@ export async function executeOfxImport({
         paymentType: resolvePaymentType({ transactionType: tx.transactionType }),
         accountType: ACCOUNT_TYPES.system,
         transferNature: TRANSACTION_TRANSFER_NATURE.not_transfer,
+        categoryId: defaultCategoryId,
         payeeId: tx.payeeName ? payeeNameToId.get(tx.payeeName.trim()) : undefined,
         rawMerchantName: tx.payeeName,
         originalId: tx.sourceTransactionKey,
@@ -267,6 +272,15 @@ export async function executeOfxImport({
   });
   summary.accountBalanceChanges.push(...accountBalanceChanges);
   summary.errors.push(...errors);
+
+  if (summary.newTransactionIds.length > 0) {
+    await queueCategorizationJob({
+      userId,
+      transactionIds: summary.newTransactionIds,
+      scope: CATEGORIZATION_SCOPE.defaultCategoryOnly,
+      trigger: CATEGORIZATION_TRIGGER.import,
+    });
+  }
 
   try {
     await deleteOfxUpload({ userId, uploadId });

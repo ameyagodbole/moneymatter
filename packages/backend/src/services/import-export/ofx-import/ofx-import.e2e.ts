@@ -108,13 +108,19 @@ describe('OFX import HTTP endpoints', () => {
     expect(account).toBeDefined();
     expect(Number(account.currentBalance)).toBe(250);
 
+    const { defaultCategoryId } = await helpers.getUserInfo({ raw: true });
     const transactions = await helpers.getTransactions({ accountIds: [account.id], raw: true });
+    expect(transactions.every((transaction) => transaction.categoryId === defaultCategoryId)).toBe(true);
     const purchase = transactions.find((transaction) => transaction.note === 'Sanitized purchase')!;
     expect(purchase).toMatchObject({
       amount: 12.34,
       transactionType: 'expense',
       paymentType: PAYMENT_TYPES.debitCard,
       accountId: account.id,
+    });
+
+    await helpers.waitForCategorizationStatus({
+      predicate: (status) => status.status !== 'idle' && status.totalCount === 2,
     });
     expect(purchase.originalId).toEqual(expect.any(String));
     expect(purchase.originalId).not.toContain('tx-1');

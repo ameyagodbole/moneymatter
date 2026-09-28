@@ -708,10 +708,16 @@ describe('Execute Import endpoint (async)', () => {
       expect(progress.summary.categoriesCreated).toBe(1);
       expect(progress.summary.errors).toHaveLength(0);
 
+      const { defaultCategoryId } = await helpers.getUserInfo({ raw: true });
       const transactions = await helpers.getTransactions({ raw: true });
       const importedTxs = transactions.filter((tx) => progress.summary.newTransactionIds.includes(tx.id));
-      expect(importedTxs.find((tx) => tx.note === 'Transaction without category')?.categoryId).toBeNull();
-      expect(importedTxs.find((tx) => tx.note === 'Transaction with category')?.categoryId).not.toBeNull();
+      expect(importedTxs.find((tx) => tx.note === 'Transaction without category')?.categoryId).toBe(defaultCategoryId);
+      expect(importedTxs.find((tx) => tx.note === 'Transaction with category')?.categoryId).not.toBe(defaultCategoryId);
+
+      // Only the row that fell back to the default category is sent to AI.
+      await helpers.waitForCategorizationStatus({
+        predicate: (status) => status.status !== 'idle' && status.totalCount === 1,
+      });
     });
 
     it('should handle all link-existing mappings (no entity creation)', async () => {

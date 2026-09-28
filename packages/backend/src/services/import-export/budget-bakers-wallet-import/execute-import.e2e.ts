@@ -571,7 +571,7 @@ describe('Execute Budget Bakers Wallet import endpoint', () => {
   /**
    * Unmapped categories and the transfer-marker category are tolerated:
    *   - A parsed ordinary-transaction category absent from `categoryMapping`
-   *     imports with no category — no error, no stray category created.
+   *     imports into the default category — no error, no stray category created.
    *   - Transfer legs whose category is the Wallet transfer marker
    *     (`Transfer, withdraw`) are never sent to `createCategoriesIfNeeded`
    *     and thus never create a category, even when the transfer-marker
@@ -582,7 +582,7 @@ describe('Execute Budget Bakers Wallet import endpoint', () => {
    *   2. Transfer pair with category "Transfer, withdraw" — transfer marker
    *
    * Expected: import completes, categoriesCreated = 0, the ordinary
-   * transaction has null categoryId, no stray categories appear.
+   * transaction has the default category, no stray categories appear.
    */
   it('unmapped category and transfer-marker category import without error and create no categories', async () => {
     const fileContent = [
@@ -619,11 +619,11 @@ describe('Execute Budget Bakers Wallet import endpoint', () => {
     const categoriesAfter = await helpers.getCategoriesList();
     expect(categoriesAfter.length).toBe(categoriesBefore.length);
 
-    // The ordinary transaction must have no category.
+    const { defaultCategoryId } = await helpers.getUserInfo({ raw: true });
     const txs = await helpers.getTransactions({ raw: true });
     const unmappedTx = txs.find((t) => t.note === 'Unmapped cat row');
     expect(unmappedTx).toBeDefined();
-    expect(unmappedTx!.categoryId).toBeNull();
+    expect(unmappedTx!.categoryId).toBe(defaultCategoryId);
   });
 
   /**
