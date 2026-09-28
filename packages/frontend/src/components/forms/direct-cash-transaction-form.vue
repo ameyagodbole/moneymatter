@@ -24,6 +24,7 @@ import { usePortfolioCurrencySorting } from '@/composable/data-queries/use-portf
 import { useFormValidation } from '@/composable/form-validator';
 import { useAccountDropdownPrefs } from '@/composable/use-account-dropdown-prefs';
 import { useAccountsStore, useCurrenciesStore } from '@/stores';
+import { format } from 'date-fns';
 import type { AccountModel, PortfolioModel, TransactionModel, UserCurrencyModel } from '@bt/shared/types';
 import { TRANSACTION_TYPES } from '@bt/shared/types';
 import { ArrowDownIcon, ArrowUpIcon, X } from '@lucide/vue';
@@ -303,7 +304,7 @@ const onSubmit = async () => {
         type: operationType.value,
         amount: String(directForm.amount),
         currencyCode: directForm.selectedCurrency!.currencyCode,
-        date: directForm.date.toISOString().split('T')[0]!,
+        date: format(directForm.date, 'yyyy-MM-dd'),
         description: directForm.description || undefined,
         isAdjustment: directForm.isAdjustment,
       });
@@ -356,7 +357,7 @@ const confirmTransfer = async () => {
         portfolioId: props.portfolioId,
         accountId: transferForm.selectedAccount!.id,
         amount: String(transferForm.amount),
-        date: transferForm.date.toISOString().split('T')[0]!,
+        date: format(transferForm.date, 'yyyy-MM-dd'),
         description: transferForm.description || undefined,
       });
     } else {
@@ -366,7 +367,7 @@ const confirmTransfer = async () => {
         accountId: transferForm.selectedAccount!.id,
         amount: String(transferForm.amount),
         currencyCode: transferForm.selectedCurrency!.currencyCode,
-        date: transferForm.date.toISOString().split('T')[0]!,
+        date: format(transferForm.date, 'yyyy-MM-dd'),
         description: transferForm.description || undefined,
       });
     }

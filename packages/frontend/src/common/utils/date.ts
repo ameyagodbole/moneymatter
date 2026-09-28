@@ -15,6 +15,17 @@ export function utcDayKey({ date }: { date: Date | string }): string {
 }
 
 /**
+ * Format a portfolio date (investment transaction or cash transfer) as the
+ * calendar day it was recorded on. These dates are calendar days: transfers
+ * store `yyyy-MM-dd` and investment transactions store midnight UTC of the
+ * day, which the backend groups by that UTC day. Reading them into the
+ * browser's timezone would show the previous day west of UTC.
+ */
+export function formatCalendarDate({ date, pattern }: { date: Date | string; pattern: string }): string {
+  return format(parseISO(utcDayKey({ date })), pattern);
+}
+
+/**
  * Format an ISO date string for compact UI display (e.g. "29 May 2026").
  * Falls back to the raw input if the value can't be parsed, so callers can
  * pass user-entered or partially-populated values without crashing.

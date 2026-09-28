@@ -22,6 +22,7 @@ import { usePortfolioCurrencySorting } from '@/composable/data-queries/use-portf
 import { usePortfolios } from '@/composable/data-queries/portfolios';
 import { useFormValidation } from '@/composable/form-validator';
 import { useAccountsStore, useCurrenciesStore } from '@/stores';
+import { format } from 'date-fns';
 import { AccountModel, PortfolioModel, TRANSACTION_TYPES, TransactionModel, UserCurrencyModel } from '@bt/shared/types';
 import { X } from '@lucide/vue';
 import { minValue, required } from '@vuelidate/validators';
@@ -381,7 +382,7 @@ const confirmTransfer = async () => {
         portfolioId,
       });
     } else {
-      const dateStr = form.date.toISOString().split('T')[0]!;
+      const dateStr = format(form.date, 'yyyy-MM-dd');
       const amount = String(form.amount);
 
       if (transferType.value === 'portfolio-to-portfolio') {

@@ -165,6 +165,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/common/dropdown-menu';
+import { formatCalendarDate } from '@/common/utils/date';
 import ResponsiveAlertDialog from '@/components/common/responsive-alert-dialog.vue';
 import UiButton from '@/components/lib/ui/button/Button.vue';
 import { Label } from '@/components/lib/ui/label';
@@ -177,7 +178,6 @@ import EditCashTransactionDialog from '@/pages/portfolios/components/edit-cash-t
 import type { PortfolioModel } from '@bt/shared/types';
 import type { PortfolioTransferModel } from '@bt/shared/types/investments';
 import { useIntersectionObserver } from '@vueuse/core';
-import { format } from 'date-fns';
 import {
   ArrowDownIcon,
   ArrowRightLeftIcon,
@@ -240,7 +240,7 @@ const confirmDelete = () => {
   }
 };
 
-const formatDate = (date: string) => format(new Date(date), 'MMM d, yyyy');
+const formatDate = (date: string) => formatCalendarDate({ date, pattern: 'MMM d, yyyy' });
 
 function isCurrencyExchange(transfer: PortfolioTransferModel): boolean {
   return !!transfer.toCurrencyCode && !!transfer.toAmount;

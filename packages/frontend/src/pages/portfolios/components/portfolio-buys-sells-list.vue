@@ -51,10 +51,10 @@
 </template>
 
 <script setup lang="ts">
+import { formatCalendarDate } from '@/common/utils/date';
 import { usePortfolioInvestmentTransactions } from '@/composable/data-queries/investment-transactions';
 import { useFormatCurrency } from '@/composable/formatters';
 import { INVESTMENT_TRANSACTION_CATEGORY } from '@bt/shared/types/investments';
-import { format } from 'date-fns';
 import { ArrowDownIcon, ArrowUpIcon, CircleDollarSignIcon } from '@lucide/vue';
 import { type Component, computed, ref, toRef } from 'vue';
 
@@ -69,7 +69,7 @@ const { data, isLoading } = usePortfolioInvestmentTransactions(portfolioId, page
 
 const transactions = computed(() => data.value?.transactions);
 
-const formatDate = (date: string) => format(new Date(date), 'MMM d, yyyy');
+const formatDate = (date: string) => formatCalendarDate({ date, pattern: 'MMM d, yyyy' });
 
 const getCategoryColor = (category: INVESTMENT_TRANSACTION_CATEGORY) => {
   if (category === INVESTMENT_TRANSACTION_CATEGORY.buy) return 'bg-app-income-color/10 text-app-income-color';

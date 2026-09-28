@@ -94,12 +94,12 @@
 </template>
 
 <script setup lang="ts">
+import { formatCalendarDate } from '@/common/utils/date';
 import { usePortfolioActivity } from '@/composable/data-queries/portfolio-activity';
 import { useFormatCurrency } from '@/composable/formatters';
 import { cn } from '@/lib/utils';
 import { INVESTMENT_TRANSACTION_CATEGORY, type PortfolioActivityItem } from '@bt/shared/types/investments';
 import { useIntersectionObserver } from '@vueuse/core';
-import { format } from 'date-fns';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -130,7 +130,7 @@ useIntersectionObserver(sentinelRef, ([entry]) => {
   }
 });
 
-const formatDate = (date: string) => format(new Date(date), 'MMM d, yyyy');
+const formatDate = (date: string) => formatCalendarDate({ date, pattern: 'MMM d, yyyy' });
 
 /** Sign of the row's cash effect: 1 in, -1 out, 0 none or mixed (currency exchange). */
 const getCashDirection = (item: PortfolioActivityItem): number => {

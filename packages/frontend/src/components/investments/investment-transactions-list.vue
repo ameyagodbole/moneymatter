@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCalendarDate } from '@/common/utils/date';
 import ColumnConfigPopover from '@/components/common/column-config-popover.vue';
 import ResponsiveTooltip from '@/components/common/responsive-tooltip.vue';
 import DeleteInvestmentTransactionDialog from '@/components/dialogs/delete-investment-transaction-dialog.vue';
@@ -28,7 +29,9 @@ defineEmits<{ (e: 'add-transaction'): void }>();
 
 const { formatAmountByCurrencyCode, formatBaseCurrency } = useFormatCurrency();
 const formatDate = (date: string | Date) => format(new Date(date), 'dd/MM/yyyy');
-const formatTransactionDate = (date: string | Date) => format(new Date(date), 'dd/MM/yyyy HH:mm');
+// Transaction dates are calendar days, shown as recorded in every timezone.
+const formatTransactionDate = (date: string | Date) => formatCalendarDate({ date, pattern: 'dd/MM/yyyy' });
+const formatTransactionDateLong = (date: string | Date) => formatCalendarDate({ date, pattern: 'EEEE, d MMMM yyyy' });
 const formatRate = (rate: string) => toLocalNumber(rate, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 
 const formatQuantity = (quantity: string | null, assetClass: ASSET_CLASS | undefined) => {
@@ -167,9 +170,9 @@ const { virtualRows, totalSize } = useVirtualizedInfiniteScroll<InvestmentTransa
                 >
                   <template v-for="column in visibleColumns" :key="column.id">
                     <div v-if="column.id === INVESTMENT_TX_COLUMN.date" class="tabular-nums">
-                      <ResponsiveTooltip :content="formatTransactionDate(transactions[virtualRow.index]!.date)">
+                      <ResponsiveTooltip :content="formatTransactionDateLong(transactions[virtualRow.index]!.date)">
                         <span class="cursor-help underline decoration-dotted underline-offset-2">
-                          {{ formatDate(transactions[virtualRow.index]!.date) }}
+                          {{ formatTransactionDate(transactions[virtualRow.index]!.date) }}
                         </span>
                       </ResponsiveTooltip>
                     </div>
