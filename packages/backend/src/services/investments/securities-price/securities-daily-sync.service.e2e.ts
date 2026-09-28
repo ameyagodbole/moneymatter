@@ -1,6 +1,7 @@
 import { ASSET_CLASS, SECURITY_PROVIDER } from '@bt/shared/types/investments';
 import Coingecko from '@coingecko/coingecko-typescript';
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { ERROR_CODES } from '@js/errors';
 import Holdings from '@models/investments/holdings.model';
 import Portfolios from '@models/investments/portfolios.model';
 import Securities from '@models/investments/securities.model';
@@ -810,6 +811,29 @@ describe('Securities Daily Sync Service (via API Endpoint)', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (Securities as any).findAll = originalFindAll;
       }
+    });
+  });
+
+  describe('Access', () => {
+    const originalAdminUsers = process.env.ADMIN_USERS;
+    const originalSelfHost = process.env.IS_SELF_HOST;
+
+    // Assigning `undefined` to process.env stores the string "undefined", so unset flags are deleted.
+    afterEach(() => {
+      if (originalAdminUsers === undefined) delete process.env.ADMIN_USERS;
+      else process.env.ADMIN_USERS = originalAdminUsers;
+      if (originalSelfHost === undefined) delete process.env.IS_SELF_HOST;
+      else process.env.IS_SELF_HOST = originalSelfHost;
+    });
+
+    it('lets any user trigger the sync on a self-hosted instance, but only admins on the hosted service', async () => {
+      process.env.ADMIN_USERS = '';
+
+      delete process.env.IS_SELF_HOST;
+      expect((await helpers.triggerSecuritiesSync()).statusCode).toBe(ERROR_CODES.Unauthorized);
+
+      process.env.IS_SELF_HOST = 'true';
+      expect((await helpers.triggerSecuritiesSync()).statusCode).toBe(200);
     });
   });
 });

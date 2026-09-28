@@ -1,4 +1,5 @@
 import { API_ERROR_CODES, API_RESPONSE_STATUS } from '@bt/shared/types';
+import { isSelfHost } from '@config/is-self-host';
 import { ERROR_CODES } from '@js/errors';
 import Users from '@models/users.model';
 import type { NextFunction, Request, Response } from 'express';
@@ -57,3 +58,11 @@ export const adminOnly = (req: Request, res: Response, next: NextFunction) => {
 
   return next();
 };
+
+/**
+ * `adminOnly` on the hosted service. On a self-hosted instance every user
+ * passes: they all spend the operator's own provider quota, which is what the
+ * admin gate protects on the hosted service.
+ */
+export const adminOrSelfHost = (req: Request, res: Response, next: NextFunction) =>
+  isSelfHost() ? next() : adminOnly(req, res, next);

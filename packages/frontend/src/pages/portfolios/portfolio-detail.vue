@@ -38,6 +38,8 @@
           </div>
 
           <div v-if="portfolio" class="flex flex-wrap items-center gap-2">
+            <SyncPricesButton />
+
             <EditPortfolioDialog :portfolio="portfolio" @updated="refetch">
               <UiButton variant="outline" size="sm">
                 <PencilIcon class="size-4" />
@@ -100,6 +102,7 @@ import { useRoute, useRouter } from 'vue-router';
 import HoldingsSummary from './components/holdings-summary.vue';
 import PortfolioBalance from './components/portfolio-balance.vue';
 import PortfolioCashBalances from './components/portfolio-cash-balances.vue';
+import SyncPricesButton from './components/sync-prices-button.vue';
 
 const route = useRoute();
 const router = useRouter();

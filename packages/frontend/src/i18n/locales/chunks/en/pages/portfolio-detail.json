@@ -12,7 +12,13 @@
       "transfer": "Transfer",
       "edit": "Edit",
       "delete": "Delete",
-      "exchangeCurrency": "Exchange Currency"
+      "exchangeCurrency": "Exchange Currency",
+      "syncPrices": "Sync prices"
+    },
+    "syncPrices": {
+      "success": "Prices updated",
+      "rateLimited": "Prices were synced recently. Try again in a few minutes.",
+      "failed": "Couldn't sync prices. Try again later."
     },
     "balance": {
       "totalValue": "Total Value",

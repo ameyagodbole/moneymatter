@@ -37,7 +37,7 @@ import createInvestmentTransactionController from '@controllers/investments/tran
 import deleteInvestmentTransactionController from '@controllers/investments/transactions/delete-tx.controller';
 import getTransactionsController from '@controllers/investments/transactions/get-transactions.controller';
 import updateInvestmentTransactionController from '@controllers/investments/transactions/update-tx.controller';
-import { adminOnly } from '@middlewares/admin-only';
+import { adminOnly, adminOrSelfHost } from '@middlewares/admin-only';
 import { authenticateSession } from '@middlewares/better-auth';
 import { blockDemoUsers } from '@middlewares/block-demo-users';
 import { checkBaseCurrencyLock } from '@middlewares/check-base-currency-lock';
@@ -190,7 +190,7 @@ router.post(
 
 router.post(
   '/sync/securities-prices',
-  adminOnly,
+  adminOrSelfHost,
   priceSyncRateLimit,
   validateEndpoint(securitiesSyncController.schema),
   securitiesSyncController.handler,
