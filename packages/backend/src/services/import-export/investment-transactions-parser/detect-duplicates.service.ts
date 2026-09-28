@@ -48,7 +48,7 @@ interface ParsedRowForDedup {
   securityId: string;
   /** YYYY-MM-DD. */
   date: string;
-  side: 'buy' | 'sell';
+  side: 'buy' | 'sell' | 'dividend';
   /** Decimal string. */
   price: string;
   /** Decimal string (`quantity * price + fees`). */
@@ -142,15 +142,14 @@ export async function detectInvestmentDuplicates({
           required: true,
         },
       ],
-      attributes: ['id', 'transactionType', 'price', 'amount', 'date'],
+      attributes: ['id', 'category', 'price', 'amount', 'date'],
     });
 
     if (existingTxs.length === 0) continue;
 
     for (const row of groupRows) {
       const match = existingTxs.find((existing) => {
-        const existingSide = existing.transactionType === 'expense' ? 'buy' : 'sell';
-        if (existingSide !== row.side) return false;
+        if (existing.category !== row.side) return false;
         if (dayDiff({ a: existing.date, b: row.date }) > DUPLICATE_DATE_WINDOW_DAYS) return false;
         if (!decimalsEqual({ a: existing.price.toDecimalString(10), b: row.price })) return false;
         if (!decimalsEqual({ a: existing.amount.toDecimalString(10), b: row.amount })) return false;

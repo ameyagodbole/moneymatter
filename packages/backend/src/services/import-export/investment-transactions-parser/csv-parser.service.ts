@@ -12,8 +12,10 @@ import {
   INVESTMENT_IMPORT_SIDE_SKIP,
   type InvestmentColumnMapping,
   INVESTMENT_TRANSACTION_CATEGORY,
+  type InvestmentImportCashSide,
   type InvestmentImportSideSkip,
   type InvestmentImportTransactionSide,
+  isCashSide,
 } from '@bt/shared/types/investments';
 import { ValidationError } from '@js/errors';
 import { parseImportDay } from '@services/import-export/core/parse/parse-date';
@@ -30,8 +32,19 @@ interface InvalidRow {
   reason: string;
 }
 
+export interface ParsedCashRow {
+  /** YYYY-MM-DD. */
+  date: string;
+  kind: InvestmentImportCashSide;
+  /** Signed decimal string: positive is cash in, negative is cash out. */
+  amount: string;
+  currencyCode: string;
+  description: string | null;
+}
+
 interface ParseInvestmentCsvResult {
   rows: NormalizedInvestmentRow[];
+  cashRows: ParsedCashRow[];
   invalidRows: InvalidRow[];
   totalRows: number;
   /**
@@ -83,8 +96,17 @@ function parseDecimal(raw: string): string | null {
   }
 }
 
+/** Signed variant of `parseDecimal`, for cash amounts whose sign carries the direction. */
+function parseSignedDecimal({ raw }: { raw: string }): string | null {
+  const trimmed = raw.trim();
+  const isNegative = trimmed.startsWith('-');
+  const magnitude = parseDecimal(isNegative ? trimmed.slice(1) : trimmed);
+  if (magnitude === null) return null;
+  return isNegative ? new Big(magnitude).times(-1).toString() : magnitude;
+}
+
 /**
- * Resolve a CSV-side value to the canonical category or the skip sentinel.
+ * Resolve a CSV-side value to the canonical category, a cash target or the skip sentinel.
  * Tries exact match first, then a normalised lower-case lookup so common
  * vocabulary variants ("Buy"/"BUY"/"buy") work without the user mapping all
  * casings explicitly.
@@ -95,7 +117,7 @@ function resolveSide({
 }: {
   raw: string;
   mapping: InvestmentColumnMapping['sideValueMapping'];
-}): InvestmentImportTransactionSide | InvestmentImportSideSkip | null {
+}): InvestmentImportTransactionSide | InvestmentImportSideSkip | InvestmentImportCashSide | null {
   if (raw in mapping) return mapping[raw]!;
   const lower = raw.trim().toLowerCase();
   for (const [key, value] of Object.entries(mapping)) {
@@ -162,6 +184,8 @@ export function parseInvestmentCsv({
     { key: 'fees', header: columnMapping.fees },
     { key: 'currency', header: columnMapping.currency },
     { key: 'name', header: columnMapping.name },
+    { key: 'amount', header: columnMapping.amount ?? null },
+    { key: 'description', header: columnMapping.description ?? null },
   ];
   for (const { key, header } of mappedColumns) {
     if (header && !headers.includes(header)) {
@@ -200,29 +224,12 @@ export function parseInvestmentCsv({
   }
 
   const rows: NormalizedInvestmentRow[] = [];
+  const cashRows: ParsedCashRow[] = [];
   const invalidRows: InvalidRow[] = [];
   let skippedRowsCount = 0;
 
   dataRows.forEach((dataRow, dataRowIdx) => {
     const rowIndex = dataRowIdx + 1;
-    const rawSymbol = readCell({ row: dataRow, header: columnMapping.symbol, headers }).toUpperCase();
-    if (!rawSymbol) {
-      invalidRows.push({ rowIndex, reason: 'Missing symbol' });
-      return;
-    }
-    // Compound tickers (SOL-USD, BTC-USDT) get split — security symbol is the
-    // head, suffix becomes the row's fallback currency.
-    const { symbol, currency: tickerCurrency } = splitCompoundTicker({ raw: rawSymbol });
-
-    const dateRaw = readCell({ row: dataRow, header: columnMapping.date, headers });
-    const date = parseImportDay({
-      raw: dateRaw,
-      format: { fieldOrder: columnMapping.dateFieldOrder, pattern: columnMapping.datePattern },
-    });
-    if (!date) {
-      invalidRows.push({ rowIndex, reason: `Unparseable date "${dateRaw}"` });
-      return;
-    }
 
     const sideRaw = readCell({ row: dataRow, header: columnMapping.side, headers });
     const side = resolveSide({ raw: sideRaw, mapping: columnMapping.sideValueMapping });
@@ -239,15 +246,72 @@ export function parseInvestmentCsv({
       return;
     }
 
+    const dateRaw = readCell({ row: dataRow, header: columnMapping.date, headers });
+    const date = parseImportDay({
+      raw: dateRaw,
+      format: { fieldOrder: columnMapping.dateFieldOrder, pattern: columnMapping.datePattern },
+    });
+    if (!date) {
+      invalidRows.push({ rowIndex, reason: `Unparseable date "${dateRaw}"` });
+      return;
+    }
+
+    const amountRaw = readCell({ row: dataRow, header: columnMapping.amount ?? null, headers });
+    const amount = parseSignedDecimal({ raw: amountRaw });
+    const currencyRaw = readCell({ row: dataRow, header: columnMapping.currency, headers });
+
+    // Cash rows carry no security, so they are checked before the symbol.
+    if (isCashSide(side)) {
+      if (!amount || new Big(amount).eq(0)) {
+        invalidRows.push({ rowIndex, reason: `Invalid amount "${amountRaw}"` });
+        return;
+      }
+      const currencyCode = currencyRaw.toUpperCase() || columnMapping.defaultCurrency?.toUpperCase();
+      if (!currencyCode) {
+        invalidRows.push({ rowIndex, reason: 'Missing currency' });
+        return;
+      }
+      cashRows.push({
+        date,
+        kind: side,
+        amount,
+        currencyCode,
+        description: readCell({ row: dataRow, header: columnMapping.description ?? null, headers }) || null,
+      });
+      return;
+    }
+
+    const rawSymbol = readCell({ row: dataRow, header: columnMapping.symbol, headers }).toUpperCase();
+    if (!rawSymbol) {
+      invalidRows.push({ rowIndex, reason: 'Missing symbol' });
+      return;
+    }
+    // Compound tickers (SOL-USD, BTC-USDT) get split — security symbol is the
+    // head, suffix becomes the row's fallback currency.
+    const { symbol, currency: tickerCurrency } = splitCompoundTicker({ raw: rawSymbol });
+
     const quantityRaw = readCell({ row: dataRow, header: columnMapping.quantity, headers });
-    const quantity = parseDecimal(quantityRaw);
+    const signedQuantity = parseSignedDecimal({ raw: quantityRaw });
+    // The side carries the direction, so signed units (M1 writes sells as
+    // negative) are read as their magnitude.
+    let quantity = signedQuantity === null ? null : new Big(signedQuantity).abs().toString();
+    const priceRaw = readCell({ row: dataRow, header: columnMapping.price, headers });
+    let price = parseDecimal(priceRaw);
+
+    // A cash dividend reported only as an amount becomes 1 × amount, so the
+    // cash received and every total stay exact.
+    const isAmountOnlyDividend =
+      side === INVESTMENT_TRANSACTION_CATEGORY.dividend && (!quantity || new Big(quantity).eq(0)) && amount !== null;
+    if (isAmountOnlyDividend) {
+      quantity = '1';
+      price = new Big(amount).abs().toString();
+    }
+
     if (!quantity || new Big(quantity).lte(0)) {
       invalidRows.push({ rowIndex, reason: `Invalid quantity "${quantityRaw}"` });
       return;
     }
 
-    const priceRaw = readCell({ row: dataRow, header: columnMapping.price, headers });
-    const price = parseDecimal(priceRaw);
     // Allow zero for non-trade categories (dividend, fee, transfer) and for
     // crypto airdrops / staking rewards that brokers occasionally encode as
     // zero-price buys. Reject only when the source text was completely unparseable.
@@ -268,7 +332,6 @@ export function parseInvestmentCsv({
       return;
     }
 
-    const currencyRaw = readCell({ row: dataRow, header: columnMapping.currency, headers });
     // Precedence: explicit currency column > compound-ticker suffix > default.
     // Ticker suffix sits between explicit column and default because it's
     // row-specific signal — better than a global default but trumped by the
@@ -291,5 +354,5 @@ export function parseInvestmentCsv({
     });
   });
 
-  return { rows, invalidRows, totalRows, skippedRowsCount };
+  return { rows, cashRows, invalidRows, totalRows, skippedRowsCount };
 }

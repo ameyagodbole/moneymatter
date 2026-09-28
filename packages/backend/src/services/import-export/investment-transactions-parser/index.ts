@@ -4,6 +4,7 @@
  * Supports PDF, CSV, and TXT files.
  */
 export { extractInvestmentTransactionsWithAI } from './ai-extraction.service';
+export { buildCashTransactions } from './build-cash-transactions.service';
 export { estimateInvestmentExtractionCost } from './cost-estimation.service';
 export { parseInvestmentCsv } from './csv-parser.service';
 export { executeInvestmentImport } from './execute-import.service';

@@ -40,14 +40,33 @@ export function isTradeSide(side: InvestmentImportTransactionSide): side is Inve
  *
  *   1. CSV cells with bogus content (escaping artefacts, free-text notes that
  *      leaked into the side column).
- *   2. Action types we don't model yet — cash deposits/withdrawals are the
- *      common ones brokers ship in the same export as trades.
+ *   2. Action types the user doesn't want imported.
  *
  * Skip-mapped rows don't appear in the holdings result and don't fill the
  * invalid-rows warnings list either — they were deliberate.
  */
 export const INVESTMENT_IMPORT_SIDE_SKIP = 'skip' as const;
 export type InvestmentImportSideSkip = typeof INVESTMENT_IMPORT_SIDE_SKIP;
+
+/**
+ * Side-mapping targets for rows that move the portfolio's cash without touching
+ * a security (no symbol needed). The sign of the row's amount decides in vs out.
+ *
+ * - `cash-contribution`: money the user moves in or out (ACH deposits,
+ *   withdrawals). Counted as a contribution.
+ * - `cash-adjustment`: cash the portfolio earns or pays on its own (platform
+ *   fees, promo credits, lending interest). Moves the balance but is not
+ *   counted as a contribution.
+ */
+export const INVESTMENT_IMPORT_CASH_CONTRIBUTION = 'cash-contribution' as const;
+export const INVESTMENT_IMPORT_CASH_ADJUSTMENT = 'cash-adjustment' as const;
+export type InvestmentImportCashSide =
+  | typeof INVESTMENT_IMPORT_CASH_CONTRIBUTION
+  | typeof INVESTMENT_IMPORT_CASH_ADJUSTMENT;
+
+export function isCashSide(side: string): side is InvestmentImportCashSide {
+  return side === INVESTMENT_IMPORT_CASH_CONTRIBUTION || side === INVESTMENT_IMPORT_CASH_ADJUSTMENT;
+}
 
 /**
  * Result of resolving an AI-parsed symbol to a CoinGecko/FMP/etc security.
@@ -112,6 +131,22 @@ export interface InvestmentImportTransaction {
   possibleDuplicateOf: string | null;
 }
 
+/** A portfolio-level cash row (no security), committed as a direct deposit or withdrawal. */
+export interface InvestmentImportCashTransaction {
+  /** Stable UI key (not persisted). */
+  tempId: string;
+  portfolioId: string;
+  /** YYYY-MM-DD. */
+  date: string;
+  kind: InvestmentImportCashSide;
+  /** Signed decimal string: positive is cash in, negative is cash out. */
+  amount: string;
+  currencyCode: string;
+  description: string | null;
+  /** id of an existing portfolio transfer this row likely repeats, when one matches. */
+  possibleDuplicateOf: string | null;
+}
+
 export interface InvestmentImportHolding {
   /** Stable UI key (not persisted). */
   tempId: string;
@@ -169,6 +204,13 @@ export interface InvestmentColumnMapping {
   /** Optional column with full security name (e.g. "Apple Inc."). */
   name: string | null;
   /**
+   * Optional signed cash amount column. Required for cash rows, and used for a
+   * dividend whose quantity cell is empty (recorded as 1 × amount).
+   */
+  amount?: string | null;
+  /** Optional free-text column kept as the description of cash rows. */
+  description?: string | null;
+  /**
    * Fallback currency for rows where the currency column is unmapped or empty.
    * null = no fallback (row's currencyCode stays null and may be inferred from
    * the resolved security downstream).
@@ -185,12 +227,17 @@ export interface InvestmentColumnMapping {
    * The `INVESTMENT_IMPORT_SIDE_SKIP` sentinel marks rows we should drop
    * silently (unsupported action types, garbage cell content).
    */
-  sideValueMapping: Record<string, InvestmentImportTransactionSide | InvestmentImportSideSkip>;
+  sideValueMapping: Record<
+    string,
+    InvestmentImportTransactionSide | InvestmentImportSideSkip | InvestmentImportCashSide
+  >;
 }
 
 export interface InvestmentImportExtractionResult {
   /** Hierarchical: one row per parsed security with child transactions. */
   holdings: InvestmentImportHolding[];
+  /** Cash rows without a security. Always empty for AI extraction. */
+  cashTransactions: InvestmentImportCashTransaction[];
   /** Human-readable warnings (e.g. "12 rows had no symbol — skipped"). */
   warnings: string[];
   /** Detected file type (matches statement-parser). */
@@ -247,6 +294,8 @@ export interface InvestmentImportExecuteRequest {
   /** The (validated, possibly user-edited) holdings to commit. Each holding's
    * asset class lives on `resolvedSecurity.assetClass`. */
   holdings: InvestmentImportHolding[];
+  /** Cash rows to commit alongside the holdings. Defaults to none. */
+  cashTransactions?: InvestmentImportCashTransaction[];
   /** tempIds of transactions the user opted to skip (possible duplicates). */
   skipTempIds: string[];
 }
@@ -258,6 +307,7 @@ export interface InvestmentImportExecuteResponse {
   createdHoldings: number;
   mergedHoldings: number;
   createdTransactions: number;
+  createdCashTransactions: number;
   /** Transactions whose `tempId` was in `skipTempIds` (user marked them as dups). */
   skippedPossibleDuplicates: number;
   /** Holdings the server refused to commit (unresolved security, missing currency,

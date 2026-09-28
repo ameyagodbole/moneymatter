@@ -13,13 +13,18 @@ import { usePrioritizedCurrencies } from '@/composable/data-queries/prioritized-
 import { getApiErrorMessage } from '@/js/errors';
 import { cn } from '@/lib/utils';
 import {
+  INVESTMENT_IMPORT_CASH_ADJUSTMENT,
+  INVESTMENT_IMPORT_CASH_CONTRIBUTION,
   INVESTMENT_IMPORT_SIDE_SKIP,
   INVESTMENT_TRANSACTION_CATEGORY,
   type InvestmentColumnMapping,
   type InvestmentImportExtractionResult,
+  type InvestmentImportCashSide,
+  type InvestmentImportCashTransaction,
   type InvestmentImportHolding,
   type InvestmentImportSideSkip,
   type InvestmentImportTransactionSide,
+  isCashSide,
 } from '@bt/shared/types/investments';
 import type { DateFieldOrder } from '@bt/shared/types';
 import { useMutation } from '@tanstack/vue-query';
@@ -45,7 +50,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   (
     e: 'extracted',
-    payload: { holdings: InvestmentImportHolding[]; warnings: string[]; mapping: InvestmentColumnMapping },
+    payload: {
+      holdings: InvestmentImportHolding[];
+      cashTransactions: InvestmentImportCashTransaction[];
+      warnings: string[];
+      mapping: InvestmentColumnMapping;
+    },
   ): void;
   (e: 'back'): void;
 }>();
@@ -54,7 +64,7 @@ const { t } = useI18n();
 const { addNotification } = useNotificationCenter();
 
 type ColumnOption = { label: string; value: string };
-type SideMappingValue = InvestmentImportTransactionSide | InvestmentImportSideSkip;
+type SideMappingValue = InvestmentImportTransactionSide | InvestmentImportSideSkip | InvestmentImportCashSide;
 type CategoryOption = { label: string; value: SideMappingValue };
 
 // Auto-pick a column when the header text matches one of these patterns. Order
@@ -68,6 +78,8 @@ const AUTO_PICK_PATTERNS: Record<keyof InvestmentColumnMapping, string[]> = {
   fees: ['fees', 'fee', 'commission', 'costs'],
   currency: ['currency', 'ccy', 'quote currency'],
   name: ['name', 'description', 'security name'],
+  amount: ['amount', 'net amount', 'total'],
+  description: ['description', 'memo', 'details'],
   // These aren't headers — never auto-picked.
   dateFieldOrder: [],
   datePattern: [],
@@ -85,6 +97,7 @@ const SIDE_AUTO_PICK: Record<string, SideMappingValue> = {
   buy: INVESTMENT_TRANSACTION_CATEGORY.buy,
   bought: INVESTMENT_TRANSACTION_CATEGORY.buy,
   purchase: INVESTMENT_TRANSACTION_CATEGORY.buy,
+  purchased: INVESTMENT_TRANSACTION_CATEGORY.buy,
   s: INVESTMENT_TRANSACTION_CATEGORY.sell,
   sell: INVESTMENT_TRANSACTION_CATEGORY.sell,
   sold: INVESTMENT_TRANSACTION_CATEGORY.sell,
@@ -98,11 +111,12 @@ const SIDE_AUTO_PICK: Record<string, SideMappingValue> = {
   tax: INVESTMENT_TRANSACTION_CATEGORY.tax,
   fee: INVESTMENT_TRANSACTION_CATEGORY.fee,
   cancel: INVESTMENT_TRANSACTION_CATEGORY.cancel,
-  deposit: INVESTMENT_IMPORT_SIDE_SKIP,
-  withdrawal: INVESTMENT_IMPORT_SIDE_SKIP,
-  withdraw: INVESTMENT_IMPORT_SIDE_SKIP,
-  'cash in': INVESTMENT_IMPORT_SIDE_SKIP,
-  'cash out': INVESTMENT_IMPORT_SIDE_SKIP,
+  deposit: INVESTMENT_IMPORT_CASH_CONTRIBUTION,
+  withdrawal: INVESTMENT_IMPORT_CASH_CONTRIBUTION,
+  withdraw: INVESTMENT_IMPORT_CASH_CONTRIBUTION,
+  'cash in': INVESTMENT_IMPORT_CASH_CONTRIBUTION,
+  'cash out': INVESTMENT_IMPORT_CASH_CONTRIBUTION,
+  interest: INVESTMENT_IMPORT_CASH_ADJUSTMENT,
 };
 
 function autoPickHeader(headers: string[], field: keyof InvestmentColumnMapping): string | null {
@@ -132,6 +146,8 @@ const priceColumn = ref<string | null>(initialColumn('price'));
 const feesColumn = ref<string | null>(initialColumn('fees'));
 const currencyColumn = ref<string | null>(initialColumn('currency'));
 const nameColumn = ref<string | null>(initialColumn('name'));
+const amountColumn = ref<string | null>(initialColumn('amount'));
+const descriptionColumn = ref<string | null>(initialColumn('description'));
 
 const dateFieldOrder = ref<DateFieldOrder | null>(props.initialMapping?.dateFieldOrder ?? null);
 const datePattern = ref<string | null>(props.initialMapping?.datePattern ?? null);
@@ -223,6 +239,8 @@ const categoryOptions = computed<CategoryOption[]>(() => [
     label: t(`investmentsImport.categories.${c}`),
     value: c as SideMappingValue,
   })),
+  { label: t('investmentsImport.categories.cashContribution'), value: INVESTMENT_IMPORT_CASH_CONTRIBUTION },
+  { label: t('investmentsImport.categories.cashAdjustment'), value: INVESTMENT_IMPORT_CASH_ADJUSTMENT },
   // Skip sentinel — keeps the rows out of the import without dirtying the
   // invalid-rows list. Always last so it doesn't shadow real categories.
   { label: t('investmentsImport.categories.skip'), value: INVESTMENT_IMPORT_SIDE_SKIP },
@@ -233,8 +251,12 @@ const assetClassOptions = computed<{ label: string; value: 'crypto' | 'stocks' }
   { label: t('investmentsImport.assetClasses.crypto'), value: 'crypto' },
 ]);
 
+// Cash rows carry their value only in the amount column.
+const needsAmountColumn = computed(() => Object.values(sideValueMapping.value).some((value) => isCashSide(value)));
+
 const requiredFilled = computed(
   () =>
+    (!needsAmountColumn.value || !!amountColumn.value) &&
     !!symbolColumn.value &&
     !!dateColumn.value &&
     isDateFormatReady.value &&
@@ -257,6 +279,7 @@ const invalidFields = computed(() => ({
   side: submitAttempted.value && !sideColumn.value,
   quantity: submitAttempted.value && !quantityColumn.value,
   price: submitAttempted.value && !priceColumn.value,
+  amount: submitAttempted.value && needsAmountColumn.value && !amountColumn.value,
 }));
 
 const invalidSideValues = computed<Set<string>>(() => {
@@ -285,6 +308,8 @@ function buildMapping(): InvestmentColumnMapping {
     fees: feesColumn.value,
     currency: currencyColumn.value,
     name: nameColumn.value,
+    amount: amountColumn.value,
+    description: descriptionColumn.value,
     defaultCurrency: defaultCurrency.value || null,
     defaultAssetClassHint: defaultAssetClassHint.value,
     sideValueMapping: { ...sideValueMapping.value },
@@ -323,7 +348,7 @@ const extract = useMutation({
     }));
     // Mapping rides along with the extract payload so the page orchestrator
     // can hand it back when the user returns from review — preserves picks.
-    emit('extracted', { holdings, warnings: result.warnings, mapping });
+    emit('extracted', { holdings, cashTransactions: result.cashTransactions, warnings: result.warnings, mapping });
   },
   onError: (err: Error) => {
     addNotification({
@@ -529,6 +554,42 @@ const extract = useMutation({
                 :values="columnOptions"
                 :placeholder="$t('investmentsImport.columnMapping.notMapped')"
                 @update:model-value="(o: ColumnOption | null) => (nameColumn = o?.value ?? null)"
+              />
+            </div>
+            <div>
+              <div class="mb-1.25 flex items-center gap-1.5 text-base leading-none font-normal tracking-wide">
+                <span>{{ $t('investmentsImport.columnMapping.fields.amount') }}</span>
+                <DesktopOnlyTooltip
+                  content-class-name="max-w-[300px]"
+                  :content="$t('investmentsImport.columnMapping.tooltips.amount')"
+                >
+                  <InfoIcon class="text-muted-foreground size-3.5 cursor-help" />
+                </DesktopOnlyTooltip>
+              </div>
+              <SelectField
+                :model-value="optionFor(amountColumn, columnOptions)"
+                :values="columnOptions"
+                :placeholder="$t('investmentsImport.columnMapping.notMapped')"
+                :class="fieldErrorClass(invalidFields.amount)"
+                :data-mapping-invalid="invalidFields.amount ? 'true' : null"
+                @update:model-value="(o: ColumnOption | null) => (amountColumn = o?.value ?? null)"
+              />
+            </div>
+            <div>
+              <div class="mb-1.25 flex items-center gap-1.5 text-base leading-none font-normal tracking-wide">
+                <span>{{ $t('investmentsImport.columnMapping.fields.description') }}</span>
+                <DesktopOnlyTooltip
+                  content-class-name="max-w-[300px]"
+                  :content="$t('investmentsImport.columnMapping.tooltips.description')"
+                >
+                  <InfoIcon class="text-muted-foreground size-3.5 cursor-help" />
+                </DesktopOnlyTooltip>
+              </div>
+              <SelectField
+                :model-value="optionFor(descriptionColumn, columnOptions)"
+                :values="columnOptions"
+                :placeholder="$t('investmentsImport.columnMapping.notMapped')"
+                @update:model-value="(o: ColumnOption | null) => (descriptionColumn = o?.value ?? null)"
               />
             </div>
           </div>

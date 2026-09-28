@@ -1,4 +1,6 @@
 import {
+  INVESTMENT_IMPORT_CASH_ADJUSTMENT,
+  INVESTMENT_IMPORT_CASH_CONTRIBUTION,
   INVESTMENT_IMPORT_SIDE_SKIP,
   INVESTMENT_TRANSACTION_CATEGORY,
   type InvestmentImportExtractionResult,
@@ -10,6 +12,7 @@ import { CustomError, UnexpectedError } from '@js/errors';
 import { logger } from '@js/utils';
 import Portfolios from '@models/investments/portfolios.model';
 import {
+  buildCashTransactions,
   extractInvestmentTransactionsWithAI,
   groupRowsIntoHoldings,
   parseInvestmentCsv,
@@ -34,11 +37,18 @@ const columnMappingSchema = z.object({
   fees: z.string().nullable(),
   currency: z.string().nullable(),
   name: z.string().nullable(),
+  amount: z.string().nullish(),
+  description: z.string().nullish(),
   defaultCurrency: z.string().nullable(),
   defaultAssetClassHint: z.enum(['crypto', 'stocks']),
   sideValueMapping: z.record(
     z.string(),
-    z.union([z.nativeEnum(INVESTMENT_TRANSACTION_CATEGORY), z.literal(INVESTMENT_IMPORT_SIDE_SKIP)]),
+    z.union([
+      z.nativeEnum(INVESTMENT_TRANSACTION_CATEGORY),
+      z.literal(INVESTMENT_IMPORT_SIDE_SKIP),
+      z.literal(INVESTMENT_IMPORT_CASH_CONTRIBUTION),
+      z.literal(INVESTMENT_IMPORT_CASH_ADJUSTMENT),
+    ]),
   ),
 });
 
@@ -162,6 +172,7 @@ async function extractFromAi({ userId, body }: { userId: number; body: z.infer<t
   return {
     data: {
       holdings,
+      cashTransactions: [],
       warnings,
       fileType: validation.fileType,
       tokenCount: aiResult.result.tokenCount,
@@ -172,7 +183,7 @@ async function extractFromAi({ userId, body }: { userId: number; body: z.infer<t
 async function extractFromCsv({ userId, body }: { userId: number; body: z.infer<typeof csvBody> }) {
   const fileContent = Buffer.from(body.fileBase64, 'base64').toString('utf-8');
 
-  const { rows, invalidRows, totalRows, skippedRowsCount } = parseInvestmentCsv({
+  const { rows, cashRows, invalidRows, totalRows, skippedRowsCount } = parseInvestmentCsv({
     fileContent,
     columnMapping: body.columnMapping,
   });
@@ -203,10 +214,16 @@ async function extractFromCsv({ userId, body }: { userId: number; body: z.infer<
     defaultPortfolioId: body.defaultPortfolioId,
     extraWarnings,
   });
+  const cashTransactions = await buildCashTransactions({
+    userId,
+    portfolioId: body.defaultPortfolioId,
+    rows: cashRows,
+  });
 
   return {
     data: {
       holdings,
+      cashTransactions,
       warnings,
       fileType: 'csv',
       tokenCount: { input: 0, output: 0 },

@@ -1,6 +1,8 @@
 import { AI_FEATURE, type RecordId } from '@bt/shared/types';
 import {
   ASSET_CLASS,
+  INVESTMENT_IMPORT_CASH_ADJUSTMENT,
+  INVESTMENT_IMPORT_CASH_CONTRIBUTION,
   INVESTMENT_IMPORT_SIDE_SKIP,
   INVESTMENT_TRANSACTION_CATEGORY,
   type InvestmentColumnMapping,
@@ -1103,6 +1105,86 @@ describe('Investment transactions AI import — E2E', () => {
       expect(holding.transactions[1]!.amount).toBe('1002.1000000000');
       expect(result.fileType).toBe('csv');
       expect(result.tokenCount).toEqual({ input: 0, output: 0 });
+    });
+
+    it('imports an M1-style export: amount-only dividends, negative-unit sells and cash rows', async () => {
+      const portfolio = await helpers.createPortfolio({
+        payload: helpers.buildPortfolioPayload({ name: 'CSV M1' }),
+        raw: true,
+      });
+      const btc = await createCryptoSecurity({ symbol: 'BTC', name: 'Bitcoin', providerSymbol: 'bitcoin' });
+      await helpers.createHolding({ payload: { portfolioId: portfolio.id, securityId: btc.id } });
+
+      const csv = [
+        'Date,Symbol,Description,Transaction Type,Amount,Units,Unit Price',
+        '"Jan 2, 2024",,ACH deposit,TRANSFER,$100.00,--,--',
+        '"Jan 3, 2024",BTC,bought,PURCHASED,$60.00,0.002,"$30,000.00"',
+        '"Jan 10, 2024",BTC,sold,SOLD,-$15.00,-0.0005,"$30,000.00"',
+        '"Jan 15, 2024",BTC,Dividend,DIVIDEND,$0.50,--,--',
+        '"Jan 17, 2024",,M1 Platform Fee,SRVCHG,-$3.00,--,--',
+        '"Jan 20, 2024",,PROMO_CREDIT_USER,CASH,$50.00,--,--',
+      ].join('\n');
+      const columnMapping = buildMapping({
+        symbol: 'Symbol',
+        side: 'Transaction Type',
+        quantity: 'Units',
+        price: 'Unit Price',
+        fees: null,
+        currency: null,
+        amount: 'Amount',
+        description: 'Description',
+        sideValueMapping: {
+          PURCHASED: INVESTMENT_TRANSACTION_CATEGORY.buy,
+          SOLD: INVESTMENT_TRANSACTION_CATEGORY.sell,
+          DIVIDEND: INVESTMENT_TRANSACTION_CATEGORY.dividend,
+          TRANSFER: INVESTMENT_IMPORT_CASH_CONTRIBUTION,
+          SRVCHG: INVESTMENT_IMPORT_CASH_ADJUSTMENT,
+          CASH: INVESTMENT_IMPORT_CASH_ADJUSTMENT,
+        },
+      });
+      const extract = () =>
+        helpers.investmentImportExtract({
+          payload: {
+            source: 'csv',
+            fileBase64: encodeFile({ text: csv }),
+            defaultPortfolioId: portfolio.id,
+            columnMapping,
+          },
+          raw: true,
+        });
+
+      const result = await extract();
+      expect(result.warnings.filter((w) => w.includes('were skipped'))).toEqual([]);
+      const [holding] = result.holdings;
+      expect(holding!.transactions.map((t) => [t.side, t.quantity, t.price])).toEqual([
+        ['buy', '0.002', '30000'],
+        ['sell', '0.0005', '30000'],
+        ['dividend', '1', '0.5'],
+      ]);
+      expect(result.cashTransactions.map((t) => [t.kind, t.amount, t.description])).toEqual([
+        [INVESTMENT_IMPORT_CASH_CONTRIBUTION, '100', 'ACH deposit'],
+        [INVESTMENT_IMPORT_CASH_ADJUSTMENT, '-3', 'M1 Platform Fee'],
+        [INVESTMENT_IMPORT_CASH_ADJUSTMENT, '50', 'PROMO_CREDIT_USER'],
+      ]);
+
+      const executed = await helpers.investmentImportExecute({
+        payload: { holdings: result.holdings, cashTransactions: result.cashTransactions, skipTempIds: [] },
+        raw: true,
+      });
+      expect(executed).toMatchObject({ createdTransactions: 3, createdCashTransactions: 3, failedTransactions: 0 });
+
+      // 100 deposit − 60 buy + 15 sell + 0.5 dividend − 3 fee + 50 promo.
+      const [balance] = await helpers.getPortfolioBalance({
+        portfolioId: portfolio.id,
+        currencyCode: 'USD',
+        raw: true,
+      });
+      expect(balance!.availableCash).toBeNumericEqual(102.5);
+
+      // Re-importing the same file offers every row as a possible duplicate.
+      const again = await extract();
+      expect(again.holdings[0]!.transactions.every((t) => t.possibleDuplicateOf !== null)).toBe(true);
+      expect(again.cashTransactions.every((t) => t.possibleDuplicateOf !== null)).toBe(true);
     });
 
     it('reads the date column with a custom datePattern', async () => {

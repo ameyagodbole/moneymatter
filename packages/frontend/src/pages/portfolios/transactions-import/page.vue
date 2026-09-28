@@ -5,7 +5,11 @@ import ResourceNotFound from '@/components/common/resource-not-found.vue';
 import { usePortfolio } from '@/composable/data-queries/portfolios';
 import { isResourceMissingError } from '@/js/errors';
 import { ROUTES_NAMES } from '@/routes';
-import type { InvestmentColumnMapping, InvestmentImportHolding } from '@bt/shared/types/investments';
+import type {
+  InvestmentColumnMapping,
+  InvestmentImportCashTransaction,
+  InvestmentImportHolding,
+} from '@bt/shared/types/investments';
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -27,6 +31,7 @@ type Step = 'upload' | 'columnMapping' | 'review';
 const step = ref<Step>('upload');
 
 const extractedHoldings = ref<InvestmentImportHolding[]>([]);
+const extractedCashTransactions = ref<InvestmentImportCashTransaction[]>([]);
 const extractedWarnings = ref<string[]>([]);
 
 // CSV-path context. Set when the upload step parses a CSV; consumed by the
@@ -43,10 +48,12 @@ const lastColumnMapping = ref<InvestmentColumnMapping | null>(null);
 
 function onExtracted(payload: {
   holdings: InvestmentImportHolding[];
+  cashTransactions: InvestmentImportCashTransaction[];
   warnings: string[];
   mapping?: InvestmentColumnMapping;
 }) {
   extractedHoldings.value = payload.holdings;
+  extractedCashTransactions.value = payload.cashTransactions;
   extractedWarnings.value = payload.warnings;
   if (payload.mapping) lastColumnMapping.value = payload.mapping;
   step.value = 'review';
@@ -143,6 +150,7 @@ function onImported() {
           v-else
           :portfolio-id="portfolioId"
           :initial-holdings="extractedHoldings"
+          :initial-cash-transactions="extractedCashTransactions"
           :initial-warnings="extractedWarnings"
           @back="onBackFromReview"
           @imported="onImported"

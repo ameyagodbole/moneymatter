@@ -1,4 +1,9 @@
-import { ASSET_CLASS, SECURITY_PROVIDER } from '@bt/shared/types/investments';
+import {
+  ASSET_CLASS,
+  INVESTMENT_IMPORT_CASH_ADJUSTMENT,
+  INVESTMENT_IMPORT_CASH_CONTRIBUTION,
+  SECURITY_PROVIDER,
+} from '@bt/shared/types/investments';
 import { recordId } from '@common/lib/zod/custom-types';
 import { createController } from '@controllers/helpers/controller-factory';
 import { UnexpectedError } from '@js/errors';
@@ -47,6 +52,17 @@ const holdingSchema = z.object({
   transactions: z.array(transactionSchema).min(1),
 });
 
+const cashTransactionSchema = z.object({
+  tempId: z.string().min(1),
+  portfolioId: recordId(),
+  date: dateString,
+  kind: z.enum([INVESTMENT_IMPORT_CASH_CONTRIBUTION, INVESTMENT_IMPORT_CASH_ADJUSTMENT]),
+  amount: decimalString,
+  currencyCode: z.string().length(3),
+  description: z.string().nullable(),
+  possibleDuplicateOf: z.string().nullable(),
+});
+
 /**
  * Persist a reviewed batch of parsed investment transactions.
  * The request body is the same shape the extract endpoint returned, with the
@@ -56,13 +72,18 @@ const holdingSchema = z.object({
  */
 export const executeImportController = createController(
   z.object({
-    body: z.object({
-      holdings: z.array(holdingSchema).min(1),
-      skipTempIds: z.array(z.string().min(1)),
-    }),
+    body: z
+      .object({
+        holdings: z.array(holdingSchema),
+        cashTransactions: z.array(cashTransactionSchema).default([]),
+        skipTempIds: z.array(z.string().min(1)),
+      })
+      .refine((body) => body.holdings.length + body.cashTransactions.length > 0, {
+        message: 'Nothing to import.',
+      }),
   }),
   async ({ user, body }) => {
-    const { holdings, skipTempIds } = body;
+    const { holdings, cashTransactions, skipTempIds } = body;
 
     // Server-side defense in depth: refuse to commit if any holding is invalid.
     // The UI already blocks this case, but the API contract still has to enforce it.
@@ -96,6 +117,7 @@ export const executeImportController = createController(
     const result = await executeInvestmentImport({
       userId: user.id,
       holdings,
+      cashTransactions,
       skipTempIds,
     });
 

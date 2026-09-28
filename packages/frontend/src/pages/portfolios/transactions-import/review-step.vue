@@ -7,12 +7,17 @@ import { DesktopOnlyTooltip } from '@/components/lib/ui/tooltip';
 import { NotificationType, useNotificationCenter } from '@/components/notification-center';
 import { useAllCurrencies } from '@/composable/data-queries/currencies';
 import { CUSTOM_BREAKPOINTS, useWindowBreakpoints } from '@/composable/window-breakpoints';
-import type { InvestmentImportHolding, InvestmentImportTransaction } from '@bt/shared/types/investments';
+import type {
+  InvestmentImportCashTransaction,
+  InvestmentImportHolding,
+  InvestmentImportTransaction,
+} from '@bt/shared/types/investments';
 import { useMutation, useQueryClient } from '@tanstack/vue-query';
 import { CircleDollarSignIcon, CoinsIcon, InfoIcon, Loader2Icon } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
+import CashTransactionsCard from './cash-transactions-card.vue';
 import HoldingCard from './holding-card.vue';
 
 const TOOLTIP_CLASS = 'max-w-xs';
@@ -20,6 +25,7 @@ const TOOLTIP_CLASS = 'max-w-xs';
 const props = defineProps<{
   portfolioId: string;
   initialHoldings: InvestmentImportHolding[];
+  initialCashTransactions: InvestmentImportCashTransaction[];
   initialWarnings: string[];
 }>();
 
@@ -36,6 +42,7 @@ const isMobile = useWindowBreakpoints(CUSTOM_BREAKPOINTS.uiMobile);
 const holdings = ref<InvestmentImportHolding[]>(
   props.initialHoldings.map((h) => ({ ...h, transactions: h.transactions.map((tx) => ({ ...tx })) })),
 );
+const cashTransactions = ref<InvestmentImportCashTransaction[]>([...props.initialCashTransactions]);
 const warnings = ref<string[]>([...props.initialWarnings]);
 const skipTempIds = ref<Set<string>>(new Set());
 const expandedHoldings = ref<Set<string>>(new Set());
@@ -99,7 +106,10 @@ const duplicateSecurityRows = computed(() => {
 });
 
 const allValid = computed(
-  () => holdings.value.length > 0 && holdings.value.every(isHoldingValid) && duplicateSecurityRows.value.size === 0,
+  () =>
+    holdings.value.length + cashTransactions.value.length > 0 &&
+    holdings.value.every(isHoldingValid) &&
+    duplicateSecurityRows.value.size === 0,
 );
 
 function computeAmount(tx: InvestmentImportTransaction): string {
@@ -131,6 +141,10 @@ function deleteTransaction(holdingTempId: string, txTempId: string) {
   if (holding.transactions.length === 0) deleteHolding(holdingTempId);
 }
 
+function deleteCashTransaction(tempId: string) {
+  cashTransactions.value = cashTransactions.value.filter((cashTx) => cashTx.tempId !== tempId);
+}
+
 function toggleSkipDuplicate(tempId: string) {
   const next = new Set(skipTempIds.value);
   if (next.has(tempId)) next.delete(tempId);
@@ -157,6 +171,7 @@ const execute = useMutation({
   mutationFn: () =>
     executeInvestmentImport({
       holdings: holdings.value,
+      cashTransactions: cashTransactions.value,
       skipTempIds: Array.from(skipTempIds.value),
     }),
   onSuccess: (result) => {
@@ -165,7 +180,9 @@ const execute = useMutation({
     queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.portfolioSummary });
     queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.portfolioBalances });
     addNotification({
-      text: t('investmentsImport.notifications.imported', { count: result.createdTransactions }),
+      text: t('investmentsImport.notifications.imported', {
+        count: result.createdTransactions + result.createdCashTransactions,
+      }),
       type: NotificationType.success,
     });
 
@@ -208,11 +225,14 @@ const execute = useMutation({
       </ul>
     </Callout>
 
-    <div v-if="holdings.length === 0" class="text-muted-foreground py-10 text-center text-sm">
+    <div
+      v-if="holdings.length === 0 && cashTransactions.length === 0"
+      class="text-muted-foreground py-10 text-center text-sm"
+    >
       {{ $t('investmentsImport.review.empty') }}
     </div>
 
-    <template v-else>
+    <template v-if="holdings.length > 0">
       <div
         class="text-muted-foreground hidden gap-3 px-4 text-xs font-medium tracking-wider uppercase @md/import:grid @md/import:grid-cols-[1fr_160px_140px_180px]"
       >
@@ -260,6 +280,14 @@ const execute = useMutation({
         @delete-transaction="(txTempId) => deleteTransaction(holding.tempId, txTempId)"
       />
     </template>
+
+    <CashTransactionsCard
+      v-if="cashTransactions.length > 0"
+      :cash-transactions="cashTransactions"
+      :skip-temp-ids="skipTempIds"
+      @toggle-skip="toggleSkipDuplicate"
+      @delete="deleteCashTransaction"
+    />
 
     <div class="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-end">
       <Button variant="outline" @click="emit('back')">{{ $t('investmentsImport.review.back') }}</Button>

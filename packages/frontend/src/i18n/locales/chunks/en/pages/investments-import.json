@@ -61,6 +61,9 @@
         "security": "We picked a security automatically based on the AI-extracted ticker. Click the field to override the match if it's wrong.",
         "currency": "Currency the cash side of the trade was settled in (e.g. USD, EUR). It does not change how the holding is stored — amounts are normalized to your base currency using historical exchange rates at the trade date.",
         "parentRowDuplicates": "{count} possible duplicate in this holding will be imported as a new transaction unless skipped. | {count} possible duplicates in this holding will be imported as new transactions unless skipped."
+      },
+      "cash": {
+        "title": "Cash movements ({count})"
       }
     },
     "done": {
@@ -98,15 +101,19 @@
         "quantity": "Quantity",
         "price": "Price",
         "fees": "Fees",
+        "amount": "Amount",
         "currency": "Currency",
         "name": "Name",
+        "description": "Description",
         "defaultCurrency": "Default currency",
         "defaultAssetClass": "Default asset class"
       },
       "tooltips": {
         "fees": "Column with commission/fees per transaction. If not mapped, fees default to 0.",
+        "amount": "The row's cash amount, with a minus sign for money going out. Required for cash rows, and used for dividends that have no units.",
         "currency": "Quote currency column (e.g. USD, EUR, USDT). Determines the cash side of each trade. Falls back to the Default currency below when empty or unmapped.",
         "name": "Optional security display name (e.g. 'Apple Inc.'). Used for display in the review step only — ticker remains the authoritative identifier.",
+        "description": "Kept as the description of cash rows, such as a platform fee or a deposit.",
         "defaultCurrency": "Used when the Currency column above is empty or not mapped.",
         "defaultAssetClass": "Hint for matching your symbols to securities. Pick the class that matches most rows in your file — you can override per security in the review step."
       }
@@ -116,6 +123,8 @@
       "sell": "Sell",
       "dividend": "Dividend",
       "transfer": "Transfer",
+      "cashContribution": "Cash deposit / withdrawal",
+      "cashAdjustment": "Cash income / expense",
       "tax": "Tax",
       "fee": "Fee",
       "cancel": "Cancel",

@@ -8,7 +8,11 @@ import { Card, CardContent } from '@/components/lib/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/lib/ui/tabs';
 import { NotificationType, useNotificationCenter } from '@/components/notification-center';
 import { getApiErrorMessage } from '@/js/errors';
-import type { InvestmentImportExtractionResult, InvestmentImportHolding } from '@bt/shared/types/investments';
+import type {
+  InvestmentImportCashTransaction,
+  InvestmentImportExtractionResult,
+  InvestmentImportHolding,
+} from '@bt/shared/types/investments';
 import type { StatementCostEstimate, StatementCostEstimateFailure } from '@bt/shared/types';
 import { useMutation } from '@tanstack/vue-query';
 import { ClipboardIcon, FileSpreadsheetIcon, FileTextIcon, Loader2Icon, SparklesIcon } from '@lucide/vue';
@@ -27,7 +31,14 @@ function base64ToUtf8(b64: string): string {
 const props = defineProps<{ portfolioId: string }>();
 
 const emit = defineEmits<{
-  (e: 'extracted', payload: { holdings: InvestmentImportHolding[]; warnings: string[] }): void;
+  (
+    e: 'extracted',
+    payload: {
+      holdings: InvestmentImportHolding[];
+      cashTransactions: InvestmentImportCashTransaction[];
+      warnings: string[];
+    },
+  ): void;
   (
     e: 'csvParsed',
     payload: { fileBase64: string; fileName: string; parseResult: InvestmentImportParseCsvResult },
@@ -140,7 +151,7 @@ const extract = useMutation({
   onSuccess: (result: InvestmentImportExtractionResult) => {
     const holdings = result.holdings.map((h) => ({ ...h, transactions: h.transactions.map((tx) => ({ ...tx })) }));
     extractAbort.value = null;
-    emit('extracted', { holdings, warnings: result.warnings });
+    emit('extracted', { holdings, cashTransactions: result.cashTransactions, warnings: result.warnings });
   },
   onError: (err: Error) => {
     if (err instanceof DOMException && err.name === 'AbortError') return;

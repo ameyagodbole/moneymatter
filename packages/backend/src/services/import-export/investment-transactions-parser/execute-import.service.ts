@@ -17,20 +17,28 @@
  * Instead we collect per-row errors and return them.
  */
 import { INVESTMENT_TRANSACTION_CATEGORY, isTradeSide } from '@bt/shared/types/investments';
-import type { InvestmentImportExecuteResponse, InvestmentImportHolding } from '@bt/shared/types/investments';
+import {
+  INVESTMENT_IMPORT_CASH_ADJUSTMENT,
+  type InvestmentImportCashTransaction,
+  type InvestmentImportExecuteResponse,
+  type InvestmentImportHolding,
+} from '@bt/shared/types/investments';
 import { logger } from '@js/utils';
 import Holdings from '@models/investments/holdings.model';
 import Portfolios from '@models/investments/portfolios.model';
 import Securities from '@models/investments/securities.model';
 import { addUserCurrencies } from '@services/currencies/add-user-currency';
+import { directCashTransaction } from '@services/investments/portfolios/transfers/direct-cash-transaction.service';
 import { addOrUpdateFromProvider } from '@services/investments/securities-manage';
 import { syncHistoricalPrices } from '@services/investments/securities-price/historical-sync.service';
 import { findSecurityByIdentity } from '@services/investments/securities/identity';
 import { createInvestmentTransaction } from '@services/investments/transactions/create.service';
+import { Big } from 'big.js';
 
 interface ExecuteImportParams {
   userId: number;
   holdings: InvestmentImportHolding[];
+  cashTransactions: InvestmentImportCashTransaction[];
   /** tempIds of transactions the user opted to skip (possible duplicates). */
   skipTempIds: string[];
 }
@@ -38,6 +46,7 @@ interface ExecuteImportParams {
 export async function executeInvestmentImport({
   userId,
   holdings,
+  cashTransactions,
   skipTempIds,
 }: ExecuteImportParams): Promise<InvestmentImportExecuteResponse> {
   const skipSet = new Set(skipTempIds);
@@ -46,6 +55,7 @@ export async function executeInvestmentImport({
   let createdHoldings = 0;
   let mergedHoldings = 0;
   let createdTransactions = 0;
+  let createdCashTransactions = 0;
   let skippedPossibleDuplicates = 0;
   let skippedHoldings = 0;
   let failedTransactions = 0;
@@ -229,6 +239,37 @@ export async function executeInvestmentImport({
     }
   }
 
+  // Cash rows become direct deposits/withdrawals. Income/expense rows are
+  // flagged as adjustments so they move the balance without counting as
+  // contributions.
+  for (const cashTx of cashTransactions) {
+    if (skipSet.has(cashTx.tempId)) {
+      skippedPossibleDuplicates += 1;
+      continue;
+    }
+    const amount = new Big(cashTx.amount);
+    try {
+      await directCashTransaction({
+        userId,
+        portfolioId: cashTx.portfolioId,
+        type: amount.gt(0) ? 'deposit' : 'withdrawal',
+        amount: amount.abs().toString(),
+        currencyCode: cashTx.currencyCode,
+        date: cashTx.date,
+        description: cashTx.description,
+        isAdjustment: cashTx.kind === INVESTMENT_IMPORT_CASH_ADJUSTMENT,
+      });
+      createdCashTransactions += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error({ message: `Failed to import cash row (tempId=${cashTx.tempId})`, error: error as Error });
+      warnings.push(
+        `Failed to import a ${cashTx.amount} ${cashTx.currencyCode} cash row on ${cashTx.date}: ${message}`,
+      );
+      failedTransactions += 1;
+    }
+  }
+
   // Fire historical price sync for any newly-created securities. Fire-and-forget,
   // lock-protected per security inside the service – mirrors createHolding.
   for (const securityId of newSecurityIds) {
@@ -245,6 +286,7 @@ export async function executeInvestmentImport({
     createdHoldings,
     mergedHoldings,
     createdTransactions,
+    createdCashTransactions,
     skippedPossibleDuplicates,
     skippedHoldings,
     failedTransactions,
