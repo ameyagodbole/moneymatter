@@ -1,4 +1,4 @@
-import { PORTFOLIO_TYPE } from '@bt/shared/types/investments';
+import { PORTFOLIO_TYPE, type PortfolioActivityItem } from '@bt/shared/types/investments';
 import { removeUndefinedKeys } from '@js/helpers';
 import { getPortfolioBalances as _getPortfolioBalances } from '@services/investments/portfolios/balances';
 import { updatePortfolioBalance as _updatePortfolioBalance } from '@services/investments/portfolios/balances';
@@ -210,6 +210,30 @@ export async function getPortfoliosAnnualizedReturns<R extends boolean | undefin
   return makeRequest<Awaited<ReturnType<typeof _getPortfoliosAnnualizedReturns>>, R>({
     method: 'get',
     url: '/investments/portfolios/annualized-returns',
+    raw,
+  });
+}
+
+export async function getPortfolioActivity<R extends boolean | undefined = false>({
+  portfolioId,
+  raw,
+  ...payload
+}: {
+  portfolioId: string;
+  limit?: number;
+  offset?: number;
+  raw?: R;
+}) {
+  return makeRequest<
+    {
+      data: PortfolioActivityItem[];
+      pagination: { limit: number; offset: number; page: number; totalCount: number };
+    },
+    R
+  >({
+    method: 'get',
+    url: `/investments/portfolios/${portfolioId}/activity`,
+    payload,
     raw,
   });
 }

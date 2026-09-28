@@ -31,7 +31,8 @@
       "tabs": {
         "balances": "Баланси",
         "cashTransactions": "Транзакції",
-        "buysSells": "Купівлі та продажі"
+        "buysSells": "Купівлі та продажі",
+        "activity": "Уся активність"
       },
       "cashTransactions": {
         "addButton": "Додати грошову транзакцію",
@@ -62,6 +63,10 @@
       "buysSells": {
         "emptyState": "Немає транзакцій купівлі/продажу",
         "shares": "од."
+      },
+      "activity": {
+        "emptyState": "У цьому портфелі ще немає активності",
+        "balanceAfter": "Кошти {amount}"
       }
     },
     "holdings": {

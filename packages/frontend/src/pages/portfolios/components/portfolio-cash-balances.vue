@@ -73,6 +73,7 @@
           :portfolio="portfolio"
         />
         <PortfolioBuysSellsList v-else-if="activeTab === 'buys-sells'" :portfolio-id="portfolioId" />
+        <PortfolioActivityList v-else-if="activeTab === 'activity'" :portfolio-id="portfolioId" />
       </div>
     </CardContent>
   </Card>
@@ -98,6 +99,7 @@ import { useI18n } from 'vue-i18n';
 
 import type { PortfolioModel } from '@bt/shared/types';
 
+import PortfolioActivityList from './portfolio-activity-list.vue';
 import PortfolioBuysSellsList from './portfolio-buys-sells-list.vue';
 import PortfolioCashOverview from './portfolio-cash-overview.vue';
 import PortfolioCashTransactionsList from './portfolio-cash-transactions-list.vue';
@@ -120,5 +122,6 @@ const tabItems = computed(() => [
   { value: 'balances', label: t('portfolioDetail.cashBalances.tabs.balances') },
   { value: 'cash-transactions', label: t('portfolioDetail.cashBalances.tabs.cashTransactions') },
   { value: 'buys-sells', label: t('portfolioDetail.cashBalances.tabs.buysSells') },
+  { value: 'activity', label: t('portfolioDetail.cashBalances.tabs.activity') },
 ]);
 </script>

@@ -31,7 +31,8 @@
       "tabs": {
         "balances": "Balances",
         "cashTransactions": "Transactions",
-        "buysSells": "Buys & Sells"
+        "buysSells": "Buys & Sells",
+        "activity": "All activity"
       },
       "cashTransactions": {
         "addButton": "Add Cash Transaction",
@@ -62,6 +63,10 @@
       "buysSells": {
         "emptyState": "No buy/sell transactions",
         "shares": "shares"
+      },
+      "activity": {
+        "emptyState": "No activity in this portfolio yet",
+        "balanceAfter": "Cash {amount}"
       }
     },
     "holdings": {

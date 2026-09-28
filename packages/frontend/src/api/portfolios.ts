@@ -3,6 +3,7 @@ import {
   PORTFOLIO_TYPE,
   PortfolioBalanceModel,
   PortfolioModel,
+  PortfolioActivityItem,
   PortfolioTransferModel,
 } from '@bt/shared/types/investments';
 import type { PortfolioAnnualizedReturnModel } from '@bt/shared/types/investments/portfolio-annualized-return.model';
@@ -151,6 +152,19 @@ export const getPortfolioTransfers = async ({
   offset?: number;
 }): Promise<PortfolioTransferModel[]> => {
   const result = await api.get(`/investments/portfolios/${portfolioId}/transfers`, { limit, offset });
+  return result.data;
+};
+
+export const getPortfolioActivity = async ({
+  portfolioId,
+  limit,
+  offset,
+}: {
+  portfolioId: string;
+  limit: number;
+  offset: number;
+}): Promise<PortfolioActivityItem[]> => {
+  const result = await api.get(`/investments/portfolios/${portfolioId}/activity`, { limit, offset });
   return result.data;
 };
 

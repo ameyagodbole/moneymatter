@@ -16,6 +16,7 @@ import deletePortfolioTransferController from '@controllers/investments/portfoli
 import directCashTransactionController from '@controllers/investments/portfolios/direct-cash-transaction';
 import exchangeCurrencyController from '@controllers/investments/portfolios/exchange-currency';
 import getPortfolioController from '@controllers/investments/portfolios/get-portfolio';
+import getPortfolioActivityController from '@controllers/investments/portfolios/get-portfolio-activity';
 import getPortfolioBalanceController from '@controllers/investments/portfolios/get-portfolio-balance';
 import getPortfolioSummaryController from '@controllers/investments/portfolios/get-portfolio-summary.controller';
 import getPortfoliosAnnualizedReturnsController from '@controllers/investments/portfolios/get-portfolios-annualized-returns.controller';
@@ -128,6 +129,12 @@ router.post(
   checkBaseCurrencyLock,
   validateEndpoint(portfolioToAccountTransferController.schema),
   portfolioToAccountTransferController.handler,
+);
+
+router.get(
+  '/portfolios/:id/activity',
+  validateEndpoint(getPortfolioActivityController.schema),
+  getPortfolioActivityController.handler,
 );
 
 router.get(

@@ -179,6 +179,8 @@ const execute = useMutation({
     queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.portfolioInvestmentTransactions });
     queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.portfolioSummary });
     queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.portfolioBalances });
+    queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.portfolioTransfers });
+    queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.portfolioActivity });
     addNotification({
       text: t('investmentsImport.notifications.imported', {
         count: result.createdTransactions + result.createdCashTransactions,
