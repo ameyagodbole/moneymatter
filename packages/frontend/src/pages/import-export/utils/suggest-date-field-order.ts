@@ -27,7 +27,8 @@ interface DateFieldOrderSuggestion {
    *  suggestion (if any) came from the locale fallback, not the data. */
   isAmbiguous: boolean;
   /** True when every non-empty cell is an intrinsically ordered shape (ISO
-   *  date/datetime or compact YYYYMMDD) — the day/month pick is meaningless. */
+   *  date/datetime, compact YYYYMMDD or English month name) — the day/month
+   *  pick is meaningless. */
   isIsoOnly: boolean;
   /** True when the column carries contradicting >12 signals (one row only
    *  valid day-first, another only valid month-first). */
@@ -103,19 +104,22 @@ export function getBrowserLocaleFieldOrder(): DateFieldOrder {
 }
 
 /**
- * Parses one date cell into calendar-day parts under the given order —
- * `null` when the value matches no known shape or is impossible under it.
+ * Parses one date cell into calendar-day parts under the given order, or only
+ * under `pattern` when one is given — `null` when the value matches no known
+ * shape or is impossible under it.
  * Zoned ISO datetimes report the UTC calendar day (preview precision only;
  * the backend stores the exact instant).
  */
 export function parseDateCellParts({
   value,
   fieldOrder,
+  pattern,
 }: {
   value: string;
   fieldOrder: DateFieldOrder;
+  pattern?: string;
 }): DateCellParts | null {
-  const parsed = parseImportDate({ value, format: { fieldOrder } });
+  const parsed = parseImportDate({ value, format: { fieldOrder, pattern } });
   if (!parsed) return null;
   if (parsed.kind === 'instant') {
     return {
@@ -127,16 +131,19 @@ export function parseDateCellParts({
   return { year: parsed.year, month: parsed.month, day: parsed.day };
 }
 
-/** Number of non-empty cells that won't parse under `fieldOrder` — the wizard
- *  warns about them before the import turns them into invalid rows. */
+/** Number of non-empty cells that won't parse under `fieldOrder` (or `pattern`)
+ *  — the wizard warns about them before the import turns them into invalid rows. */
 export function countMismatchedDateCells({
   values,
   fieldOrder,
+  pattern,
 }: {
   values: string[];
   fieldOrder: DateFieldOrder;
+  pattern?: string;
 }): number {
-  return meaningfulValues({ values }).filter((value) => parseDateCellParts({ value, fieldOrder }) === null).length;
+  return meaningfulValues({ values }).filter((value) => parseDateCellParts({ value, fieldOrder, pattern }) === null)
+    .length;
 }
 
 /**

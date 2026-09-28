@@ -22,6 +22,7 @@ import { toColumnMappingConfig } from './column-mapping-config';
 const baseMapping: ColumnMapping = {
   date: 'Date',
   dateFieldOrder: 'month-first',
+  datePattern: null,
   amount: 'Amount',
   description: 'Memo',
   payee: null,
@@ -45,6 +46,13 @@ describe('toColumnMappingConfig — returns null when required field is missing'
   it('returns null when dateFieldOrder is unconfirmed', () => {
     const result = toColumnMappingConfig({ mapping: { ...baseMapping, dateFieldOrder: null } });
     expect(result).toBeNull();
+  });
+
+  it('returns null for a blank custom pattern and passes a set one through trimmed', () => {
+    expect(toColumnMappingConfig({ mapping: { ...baseMapping, datePattern: ' ' } })).toBeNull();
+    expect(toColumnMappingConfig({ mapping: { ...baseMapping, datePattern: ' MMM d, yyyy ' } })?.datePattern).toBe(
+      'MMM d, yyyy',
+    );
   });
 
   it('returns null when amount is null', () => {

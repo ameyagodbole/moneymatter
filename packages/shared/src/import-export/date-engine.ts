@@ -1,3 +1,5 @@
+import { format as formatDate, isValid, parse } from 'date-fns';
+
 import { type SupportedLocale } from '../i18n/locales';
 import { type DateFieldOrder } from '../types/import-export';
 
@@ -35,11 +37,13 @@ interface ParseImportDateParams {
  * A single resolved format applied to a whole mapped date column.
  *
  * `fieldOrder` only governs the ambiguous slash/dot/dash family (`d/d/yyyy`);
- * ISO, ISO-datetime and compact values carry their order intrinsically and
- * ignore it.
+ * ISO, ISO-datetime, compact and English month-name values carry their order
+ * intrinsically and ignore it. `pattern` (date-fns tokens, e.g. `MMM d, yyyy`)
+ * replaces every built-in shape: when set, it is the only grammar applied.
  */
 export interface DateColumnFormat {
   fieldOrder: DateFieldOrder;
+  pattern?: string;
 }
 
 interface DetectDateColumnFormatParams {
@@ -80,6 +84,38 @@ const AMBIGUOUS_DMY = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})(?:(?:,\s*|\s+)
 // First separator character of an ambiguous-family value, for option labels.
 const AMBIGUOUS_SEPARATOR = /^\d{1,2}([/.-])/;
 
+// Month word first: "Sep 21, 2026", "September 21 2026", "Sept. 21st, 2026".
+// The word is any letters so month names in other languages match the shape
+// and can be reported instead of silently failing.
+const MONTH_NAME_FIRST = /^(\p{L}+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/u;
+
+// Day first: "21 Sep 2026", "21-Sep-26", "1 March, 2025".
+const DAY_FIRST_MONTH_NAME = /^(\d{1,2})(?:st|nd|rd|th)?[\s-]+(\p{L}+)\.?,?[\s-]+(\d{4}|\d{2})$/u;
+
+const ENGLISH_MONTHS = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+];
+
+// Quoted literals in a date-fns pattern, which never hold tokens.
+const PATTERN_LITERAL = /'[^']*'/g;
+
+// Any date-fns year token; without one, parse() silently takes the reference year.
+const PATTERN_YEAR_TOKEN = /[yu]/;
+
+// Any date-fns hour token; with one, the value is a wall-clock time, not a day.
+const PATTERN_HOUR_TOKEN = /[HhKk]/;
+
 function isValidCalendarDate({ year, month, day }: { year: number; month: number; day: number }): boolean {
   if (month < 1 || month > 12) return false;
   if (day < 1 || day > 31) return false;
@@ -97,15 +133,96 @@ function resolveAmbiguousYear(yearStr: string): number {
   return year >= 70 ? 1900 + year : 2000 + year;
 }
 
-/** True when the value is an ISO date/datetime or compact YYYYMMDD — shapes
- *  that carry their field order intrinsically and ignore `fieldOrder`. */
+/** True when the value is an ISO date/datetime, compact YYYYMMDD or English
+ *  month-name date — shapes that carry their field order intrinsically and
+ *  ignore `fieldOrder`. */
 export function isIntrinsicallyOrdered({ value }: { value: string }): boolean {
   return (
-    ISO_ZONED_DATETIME.test(value) || ISO_LOCAL_DATETIME.test(value) || ISO_DATE.test(value) || COMPACT_DATE.test(value)
+    ISO_ZONED_DATETIME.test(value) ||
+    ISO_LOCAL_DATETIME.test(value) ||
+    ISO_DATE.test(value) ||
+    COMPACT_DATE.test(value) ||
+    isEnglishMonthNameDate({ value })
   );
 }
 
+/** True when the value is shaped like an English month-name date (`Sep 21, 2026`). */
+export function isEnglishMonthNameDate({ value }: { value: string }): boolean {
+  const shape = matchMonthNameShape({ value });
+  return shape !== null && englishMonthNumber({ word: shape.word }) !== null;
+}
+
+/** True when a cell is shaped like a month-name date but its month word isn't
+ *  English — such cells can't be parsed, and the wizard warns about them. */
+export function hasNonEnglishMonthNames({ values }: { values: string[] }): boolean {
+  return values.some((value) => {
+    const shape = matchMonthNameShape({ value });
+    return shape !== null && englishMonthNumber({ word: shape.word }) === null;
+  });
+}
+
+/** Month number for a full or 3-letter English month name (plus "Sept"), case-insensitive. */
+function englishMonthNumber({ word }: { word: string }): number | null {
+  const normalized = word.toLowerCase();
+  if (normalized === 'sept') return 9;
+  const index = ENGLISH_MONTHS.findIndex((name) => name === normalized || name.slice(0, 3) === normalized);
+  return index === -1 ? null : index + 1;
+}
+
+/** Year, month word and day of a month-name-shaped value, whatever the month word's language. */
+function matchMonthNameShape({ value }: { value: string }): { yearStr: string; word: string; day: number } | null {
+  const monthFirst = value.match(MONTH_NAME_FIRST);
+  if (monthFirst) return { word: monthFirst[1]!, day: Number(monthFirst[2]), yearStr: monthFirst[3]! };
+  const dayFirst = value.match(DAY_FIRST_MONTH_NAME);
+  if (dayFirst) return { day: Number(dayFirst[1]), word: dayFirst[2]!, yearStr: dayFirst[3]! };
+  return null;
+}
+
+function parseEnglishMonthName({ value }: { value: string }): ParsedImportDate | null {
+  const shape = matchMonthNameShape({ value });
+  if (!shape) return null;
+  const month = englishMonthNumber({ word: shape.word });
+  if (month === null) return null;
+  const year = resolveAmbiguousYear(shape.yearStr);
+  if (!isValidCalendarDate({ year, month, day: shape.day })) return null;
+  return { kind: 'dateOnly', year, month, day: shape.day };
+}
+
+function parseWithPattern({ value, pattern }: { value: string; pattern: string }): ParsedImportDate | null {
+  const tokens = pattern.replace(PATTERN_LITERAL, '');
+  if (!PATTERN_YEAR_TOKEN.test(tokens)) return null;
+
+  let date: Date;
+  try {
+    date = parse(value, pattern, new Date());
+  } catch {
+    // date-fns throws on invalid or protected tokens (e.g. `YYYY`, `DD`).
+    return null;
+  }
+  if (!isValid(date)) return null;
+  // parse() reads leniently (e.g. `dd` accepts `021`); only a value the pattern
+  // prints back verbatim is accepted, so nothing is misread or rolled over.
+  if (formatDate(date, pattern).toLowerCase() !== value.toLowerCase()) return null;
+
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  if (!PATTERN_HOUR_TOKEN.test(tokens)) return { kind: 'dateOnly', year, month, day };
+  return {
+    kind: 'localDateTime',
+    year,
+    month,
+    day,
+    hour: date.getHours(),
+    minute: date.getMinutes(),
+    second: date.getSeconds(),
+    ms: date.getMilliseconds(),
+  };
+}
+
 export function parseImportDate({ value, format }: ParseImportDateParams): ParsedImportDate | null {
+  if (format.pattern) return parseWithPattern({ value, pattern: format.pattern });
+
   if (ISO_ZONED_DATETIME.test(value)) {
     return { kind: 'instant', instant: new Date(value) };
   }
@@ -172,7 +289,7 @@ export function parseImportDate({ value, format }: ParseImportDateParams): Parse
     return { kind: 'localDateTime', year, month, day, hour, minute, second: seconds, ms: 0 };
   }
 
-  return null;
+  return parseEnglishMonthName({ value });
 }
 
 /**

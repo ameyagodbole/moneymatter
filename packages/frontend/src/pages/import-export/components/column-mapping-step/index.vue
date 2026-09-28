@@ -249,6 +249,7 @@ import {
   isAccountDecided,
   isCategoryDecided,
   isCurrencyDecided,
+  isDateFormatDecided,
   isTransactionTypeDecided,
 } from '@/pages/import-export/utils/field-decision';
 import { buildCategoryMapById } from '@/pages/import-export/utils/flatten-categories';
@@ -414,7 +415,9 @@ const simpleRows = computed<SimpleRow[]>(() => [
     // too, so the row stays flagged until the expansion's pick is made.
     value: m.value.date,
     status: deriveMapRowStatus({
-      hasValue: !!m.value.date && !!m.value.dateFieldOrder,
+      hasValue:
+        !!m.value.date &&
+        isDateFormatDecided({ dateFieldOrder: m.value.dateFieldOrder, datePattern: m.value.datePattern }),
       required: true,
       match: importStore.columnMatch?.date ?? null,
     }),
@@ -423,6 +426,7 @@ const simpleRows = computed<SimpleRow[]>(() => [
       // the user must confirm the format again.
       if (value !== importStore.columnMapping.date) {
         importStore.columnMapping.dateFieldOrder = null;
+        importStore.columnMapping.datePattern = null;
       }
       importStore.columnMapping.date = value;
     },
@@ -795,7 +799,8 @@ const isAdvancing = computed(() => importStore.isDetectingDuplicates);
 const missingHint = computed(() => {
   const missing: string[] = [];
   if (!m.value.date) missing.push(t('pages.importExport.mapColumns.fields.date'));
-  else if (!m.value.dateFieldOrder) missing.push(t('pages.importExport.mapColumns.dateFormat.label'));
+  else if (!isDateFormatDecided({ dateFieldOrder: m.value.dateFieldOrder, datePattern: m.value.datePattern }))
+    missing.push(t('pages.importExport.mapColumns.dateFormat.label'));
   if (!m.value.amount) missing.push(t('pages.importExport.mapColumns.fields.amount'));
   if (categoryStatus.value === 'needs-attention') missing.push(t('pages.importExport.mapColumns.fields.category'));
   if (accountStatus.value === 'needs-attention') missing.push(t('pages.importExport.mapColumns.fields.account'));

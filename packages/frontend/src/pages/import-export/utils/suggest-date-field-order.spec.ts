@@ -50,6 +50,10 @@ describe('suggestDateFieldOrder', () => {
     expect(result).toEqual({ suggestion: null, isAmbiguous: false, isIsoOnly: true, conflict: false });
   });
 
+  it('flags a column of English month-name dates as isIsoOnly', () => {
+    expect(suggestDateFieldOrder({ values: ['Sep 21, 2026', '21 Sep 2026'] }).isIsoOnly).toBe(true);
+  });
+
   it('does not flag isIsoOnly when a single ambiguous-family cell is mixed in', () => {
     const result = suggestDateFieldOrder({ values: ['2026-06-01', '08/06/2026'] });
 
@@ -216,5 +220,22 @@ describe('two-digit years and time suffixes', () => {
     expect(countMismatchedDateCells({ values: ['01/01/26, 10:58', '02/01/26, 09:12'], fieldOrder: 'day-first' })).toBe(
       0,
     );
+  });
+});
+
+describe('custom pattern', () => {
+  it('parses and counts mismatches with the pattern instead of the field order', () => {
+    expect(parseDateCellParts({ value: '21.Sep.2026', fieldOrder: 'day-first', pattern: 'd.MMM.yyyy' })).toEqual({
+      year: 2026,
+      month: 9,
+      day: 21,
+    });
+    expect(
+      countMismatchedDateCells({
+        values: ['21.Sep.2026', '21/09/2026'],
+        fieldOrder: 'day-first',
+        pattern: 'd.MMM.yyyy',
+      }),
+    ).toBe(1);
   });
 });

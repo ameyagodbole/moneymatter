@@ -78,19 +78,21 @@ Once you pick the **Date** column, a **Date format** block opens under it. Choos
 
 - **Day first**, for dates like 31/12/2024
 - **Month first**, for dates like 12/31/2024
+- **Custom format…**, for any other style. Type a **Date pattern** using [date-fns tokens](https://date-fns.org/docs/format): `MMM d, yyyy` for "Sep 21, 2026", `dd.MM.yy HH:mm` for "21.09.26 14:30". The pattern must include the year, and only dates written exactly in that pattern are read.
 
 MoneyMatter marks the option that fits your file with a **Suggested** badge, but it never picks it for you. A date like 01/02/2024 could be 1 February or 2 January, and only you know which your bank means. **Next** stays disabled until you choose.
 
 The **Preview** below shows how the first few dates will be read. If some rows don't fit the format you picked, a warning tells you how many will be flagged as invalid.
 
-If every date in the column starts with the year (like 2024-12-31), there's nothing to choose and you'll see "ISO date format detected".
+If every date in the column starts with the year (like 2024-12-31), there's nothing to choose and you'll see "ISO date format detected". The same goes for dates with English month names, like "Sep 21, 2026": you'll see "Dates with month names detected".
 
 These date styles work:
 
 - Year first: 2024-12-31, 2024/12/31, 2024.12.31 or 20241231. A time (like 2024-12-31 14:30) only works with the dash format.
 - Day and month: 31/12/2024 or 12/31/2024, with `/`, `.` or `-` between the parts, a two- or four-digit year, and an optional time such as 14:30. Two-digit years from 70 to 99 mean 1970–1999, and 00 to 69 mean 2000–2069.
+- English month names: Sep 21, 2026, September 21 2026, 21 Sep 2026 or 21-Sep-26. Short names, full names and "Sept" all work.
 
-Dates with month names, like "Jan 5, 2024", aren't recognised, and those rows become invalid. Impossible dates such as 31/02/2024 are rejected too.
+Month names in other languages aren't recognised: a warning shows, and those rows become invalid. Impossible dates such as 31/02/2024 are rejected too.
 
 ### Amounts
 

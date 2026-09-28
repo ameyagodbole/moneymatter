@@ -1,4 +1,10 @@
-import { type DateColumnFormat, detectDateColumnFormat, parseImportDate } from '@bt/shared/import-export/date-engine';
+import {
+  type DateColumnFormat,
+  detectDateColumnFormat,
+  hasNonEnglishMonthNames,
+  isIntrinsicallyOrdered,
+  parseImportDate,
+} from '@bt/shared/import-export/date-engine';
 import { describe, expect, it } from '@jest/globals';
 
 // A neutral format for value-shape tests where field order is irrelevant
@@ -268,5 +274,71 @@ describe('ambiguous family: two-digit years and time suffixes', () => {
 describe('ISO local datetime calendar validation', () => {
   it('returns null for an impossible calendar date in an ISO datetime instead of rolling it over', () => {
     expect(parseImportDate({ value: '2026-02-30 10:00', format: ANY_FORMAT })).toBeNull();
+  });
+});
+
+describe('English month-name dates', () => {
+  it.each([
+    ['Sep 21, 2026', { year: 2026, month: 9, day: 21 }],
+    ['September 21 2026', { year: 2026, month: 9, day: 21 }],
+    ['Sept. 21st, 2026', { year: 2026, month: 9, day: 21 }],
+    ['21 Sep 2026', { year: 2026, month: 9, day: 21 }],
+    ['21-SEP-26', { year: 2026, month: 9, day: 21 }],
+    ['1 March, 2025', { year: 2025, month: 3, day: 1 }],
+  ])('parses %s as dateOnly regardless of field order', (value, parts) => {
+    expect(parseImportDate({ value, format: { fieldOrder: 'day-first' } })).toEqual({ kind: 'dateOnly', ...parts });
+    expect(isIntrinsicallyOrdered({ value })).toBe(true);
+  });
+
+  it('returns null for an impossible date instead of rolling it over', () => {
+    expect(parseImportDate({ value: 'Feb 30, 2026', format: ANY_FORMAT })).toBeNull();
+  });
+
+  it('does not recognize month names in other languages, and reports them', () => {
+    expect(parseImportDate({ value: '21 вер 2026', format: ANY_FORMAT })).toBeNull();
+    expect(isIntrinsicallyOrdered({ value: '21 вер 2026' })).toBe(false);
+    expect(hasNonEnglishMonthNames({ values: ['Sep 21, 2026', '21 вер 2026'] })).toBe(true);
+    expect(hasNonEnglishMonthNames({ values: ['Sep 21, 2026', '21/09/2026'] })).toBe(false);
+  });
+});
+
+describe('custom date-fns pattern', () => {
+  it('parses a date-only pattern as dateOnly', () => {
+    expect(parseImportDate({ value: '21.Sep.2026', format: { ...ANY_FORMAT, pattern: 'd.MMM.yyyy' } })).toEqual({
+      kind: 'dateOnly',
+      year: 2026,
+      month: 9,
+      day: 21,
+    });
+  });
+
+  it('parses a pattern with a time as localDateTime', () => {
+    expect(
+      parseImportDate({ value: '2026/09/21 7:05 PM', format: { ...ANY_FORMAT, pattern: 'yyyy/MM/dd h:mm a' } }),
+    ).toEqual({
+      kind: 'localDateTime',
+      year: 2026,
+      month: 9,
+      day: 21,
+      hour: 19,
+      minute: 5,
+      second: 0,
+      ms: 0,
+    });
+  });
+
+  it('is the only grammar applied when set', () => {
+    expect(parseImportDate({ value: '2026-09-21', format: { ...ANY_FORMAT, pattern: 'd.MMM.yyyy' } })).toBeNull();
+  });
+
+  it('rejects values the pattern would not print, instead of rolling over or reading leniently', () => {
+    const format: DateColumnFormat = { ...ANY_FORMAT, pattern: 'dd/MM/yyyy' };
+    expect(parseImportDate({ value: '31/02/2026', format })).toBeNull();
+    expect(parseImportDate({ value: '021/09/2026', format })).toBeNull();
+  });
+
+  it('returns null for a pattern without a year or with invalid tokens', () => {
+    expect(parseImportDate({ value: 'Sep 21', format: { ...ANY_FORMAT, pattern: 'MMM d' } })).toBeNull();
+    expect(parseImportDate({ value: '2026-09-21', format: { ...ANY_FORMAT, pattern: 'YYYY-MM-DD' } })).toBeNull();
   });
 });

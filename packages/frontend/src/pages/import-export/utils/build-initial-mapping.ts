@@ -46,6 +46,8 @@ export interface ColumnMapping {
    * so the initial build never fills this in.
    */
   dateFieldOrder: DateFieldOrder | null;
+  /** Custom date-fns pattern for the date column; `null` unless the user picks the custom format. */
+  datePattern: string | null;
   /** Matched amount column header, or `null` when no column matched. */
   amount: string | null;
   /** Matched description column header, or `null` when none matched (optional field). */
@@ -126,6 +128,7 @@ export function buildInitialColumnMapping({
     // The user must confirm the day/month order themselves; suggestion happens
     // in the Map step's date-format expansion, never here.
     dateFieldOrder: null,
+    datePattern: null,
     amount: matchResult.amount?.column ?? null,
     description: matchResult.description?.column ?? null,
     payee: matchResult.payee?.column ?? null,

@@ -51,6 +51,7 @@ export const columnMappingConfigSchema = z.object({
   // Required: the wizard forces the user to confirm the day/month order of the
   // date column, so every payload carries an explicit choice.
   dateFieldOrder: z.enum(['day-first', 'month-first']),
+  datePattern: z.string().trim().min(1).max(64).optional(),
   amount: z.string(),
   description: z.string().optional(),
   payee: z.string().optional(),

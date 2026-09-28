@@ -256,6 +256,32 @@ describe('Execute Import endpoint (async)', () => {
       expect(monthFirstTxs.map((tx) => txDay(tx.time)).sort()).toEqual(['2026-02-03', '2026-05-06']);
     });
 
+    it('parses the date column with a custom datePattern', async () => {
+      const account = await helpers.createAccount({ raw: true });
+      const rows: CsvRow[] = ['21.Sep.2026', '3.Mar.2026'].map((date) => ({
+        date,
+        amount: '10.00',
+        account: 'CSV Account',
+        currency: account.currencyCode,
+        type: 'expense',
+      }));
+
+      const { progress } = await runImport({
+        fileContent: buildCsv(rows),
+        columnMapping: buildColumnMapping({ datePattern: 'd.MMM.yyyy' }),
+        accountMapping: { 'CSV Account': { action: 'link-existing', accountId: account.id } },
+      });
+      expectCsvImportCompleted(progress);
+      const { summary } = progress;
+      expect(summary.imported).toBe(2);
+
+      const transactions = await helpers.getTransactions({ raw: true });
+      const days = transactions
+        .filter((tx) => summary.newTransactionIds.includes(tx.id))
+        .map((tx) => new Date(tx.time).toISOString().split('T')[0]);
+      expect(days.toSorted()).toEqual(['2026-03-03', '2026-09-21']);
+    });
+
     it('should create new account when action is create-new', async () => {
       const accountsBefore = await helpers.getAccounts();
 

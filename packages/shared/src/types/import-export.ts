@@ -194,6 +194,9 @@ export interface ColumnMappingConfig {
   date: string;
   /** User-confirmed day/month order applied to the whole `date` column. */
   dateFieldOrder: DateFieldOrder;
+  /** Custom date-fns pattern (e.g. `MMM d, yyyy`) for the `date` column. When
+   *  set, it replaces every built-in shape and `dateFieldOrder` is ignored. */
+  datePattern?: string;
   amount: string;
   description?: string;
   /** Optional CSV column whose value becomes `rawMerchantName` on the imported

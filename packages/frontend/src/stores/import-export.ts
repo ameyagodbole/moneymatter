@@ -42,6 +42,7 @@ import {
   isAccountDecided,
   isCategoryDecided,
   isCurrencyDecided,
+  isDateFormatDecided,
   isTransactionTypeDecided,
 } from '@/pages/import-export/utils/field-decision';
 import { flattenCategories } from '@/pages/import-export/utils/flatten-categories';
@@ -74,6 +75,7 @@ const ALL_STEP_KEYS: readonly ImportStepKey[] = [
 const emptyColumnMapping = (): ColumnMapping => ({
   date: null,
   dateFieldOrder: null,
+  datePattern: null,
   amount: null,
   description: null,
   payee: null,
@@ -351,8 +353,8 @@ export const useImportExportStore = defineStore('importExport', () => {
 
     if (!m.date || !m.amount) return false;
     // The day/month order is a forced, explicit user choice (auto-detection
-    // only pre-suggests), so an unconfirmed order blocks Next.
-    if (!m.dateFieldOrder) return false;
+    // only pre-suggests), so an unconfirmed order or a blank custom pattern blocks Next.
+    if (!isDateFormatDecided({ dateFieldOrder: m.dateFieldOrder, datePattern: m.datePattern })) return false;
     if (!isCategoryDecided({ category: m.category })) return false;
     if (!isAccountDecided({ account: m.account })) return false;
     if (!isCurrencyDecided({ currency: m.currency })) return false;

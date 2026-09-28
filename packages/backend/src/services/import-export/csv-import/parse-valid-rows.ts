@@ -95,11 +95,11 @@ export async function parseValidRows({
   // Get default values for single-selection options
   const defaultCurrency = await getDefaultCurrency(userId, columnMapping);
 
-  // The day/month order of the ambiguous d/d/yyyy family is the user's explicit
-  // wizard choice, applied to the whole column. Cells that don't form a valid
-  // calendar date under that order fall into the per-row invalid path below —
+  // The day/month order of the ambiguous d/d/yyyy family, or a custom pattern,
+  // is the user's explicit wizard choice, applied to the whole column. Cells that
+  // don't form a valid calendar date under that choice fall into the per-row invalid path below —
   // never a whole-column block, and never a re-guess per value.
-  const dateFormat = { fieldOrder: columnMapping.dateFieldOrder };
+  const dateFormat = { fieldOrder: columnMapping.dateFieldOrder, pattern: columnMapping.datePattern };
 
   // Parse and validate each row
   const validRows: ParsedTransactionRow[] = [];

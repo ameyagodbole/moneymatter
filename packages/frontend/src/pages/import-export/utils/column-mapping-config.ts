@@ -12,10 +12,10 @@
 import type { ColumnMappingConfig } from '@bt/shared/types';
 
 import type { ColumnMapping } from './build-initial-mapping';
-import { isAccountDecided, isCategoryDecided, isCurrencyDecided } from './field-decision';
+import { isAccountDecided, isCategoryDecided, isCurrencyDecided, isDateFormatDecided } from './field-decision';
 
 export function toColumnMappingConfig({ mapping }: { mapping: ColumnMapping }): ColumnMappingConfig | null {
-  const { date, dateFieldOrder, amount, category, account, currency, transactionType } = mapping;
+  const { date, dateFieldOrder, datePattern, amount, category, account, currency, transactionType } = mapping;
 
   // The truthiness checks narrow the nullable working fields. The `*Decided`
   // predicates additionally require the chosen method's id: a present object can
@@ -24,6 +24,7 @@ export function toColumnMappingConfig({ mapping }: { mapping: ColumnMapping }): 
   if (
     !date ||
     !dateFieldOrder ||
+    !isDateFormatDecided({ dateFieldOrder, datePattern }) ||
     !amount ||
     !category ||
     !account ||
@@ -38,6 +39,7 @@ export function toColumnMappingConfig({ mapping }: { mapping: ColumnMapping }): 
   return {
     date,
     dateFieldOrder,
+    datePattern: datePattern?.trim() || undefined,
     amount,
     description: mapping.description || undefined,
     payee: mapping.payee || undefined,

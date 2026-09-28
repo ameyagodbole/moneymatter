@@ -6,7 +6,22 @@ import {
 } from '@bt/shared/types';
 import { describe, expect, it } from 'vitest';
 
-import { isAccountDecided, isCategoryDecided, isCurrencyDecided, isTransactionTypeDecided } from './field-decision';
+import {
+  isAccountDecided,
+  isCategoryDecided,
+  isCurrencyDecided,
+  isDateFormatDecided,
+  isTransactionTypeDecided,
+} from './field-decision';
+
+describe('isDateFormatDecided', () => {
+  it('requires an order, and a non-blank pattern once the custom format is chosen', () => {
+    expect(isDateFormatDecided({ dateFieldOrder: null, datePattern: null })).toBe(false);
+    expect(isDateFormatDecided({ dateFieldOrder: 'day-first', datePattern: null })).toBe(true);
+    expect(isDateFormatDecided({ dateFieldOrder: 'month-first', datePattern: '  ' })).toBe(false);
+    expect(isDateFormatDecided({ dateFieldOrder: 'month-first', datePattern: 'MMM d, yyyy' })).toBe(true);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // isCategoryDecided
