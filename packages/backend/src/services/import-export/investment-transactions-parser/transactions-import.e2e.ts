@@ -1,4 +1,4 @@
-import { AI_FEATURE, type RecordId } from '@bt/shared/types';
+import { AI_FEATURE, type RecordId, TRANSACTION_TYPES } from '@bt/shared/types';
 import {
   ASSET_CLASS,
   INVESTMENT_IMPORT_CASH_ADJUSTMENT,
@@ -613,7 +613,7 @@ describe('Investment transactions AI import — E2E', () => {
       expect(txs).toHaveLength(2);
     });
 
-    it('imports dividend rows as cash income and still rejects fee rows', async () => {
+    it('imports dividend rows as cash income and fee rows as cash expense', async () => {
       const portfolio = await helpers.createPortfolio({
         payload: helpers.buildPortfolioPayload({ name: 'Dividends' }),
         raw: true,
@@ -669,21 +669,25 @@ describe('Investment transactions AI import — E2E', () => {
       expect(result.createdTransactions).toBe(1);
       expect(result.failedTransactions).toBe(0);
 
-      const feeResponse = await helpers.investmentImportExecute({
-        payload: buildPayload({ side: 'fee', price: '3', amount: '30' }),
+      const feeResult = await helpers.investmentImportExecute({
+        payload: buildPayload({ side: 'fee', price: '0.3', amount: '3' }),
+        raw: true,
       });
-      expect(feeResponse.statusCode).not.toBe(200);
+      expect(feeResult).toMatchObject({ createdTransactions: 1, failedTransactions: 0 });
 
       const txs = await InvestmentTransaction.findAll({ where: { securityId: btc!.id } });
-      expect(txs).toHaveLength(1);
-      expect(txs[0]!.category).toBe(INVESTMENT_TRANSACTION_CATEGORY.dividend);
+      expect(txs.map((tx) => [tx.category, tx.transactionType]).toSorted()).toEqual([
+        [INVESTMENT_TRANSACTION_CATEGORY.dividend, TRANSACTION_TYPES.income],
+        [INVESTMENT_TRANSACTION_CATEGORY.fee, TRANSACTION_TYPES.expense],
+      ]);
 
       const [balance] = await helpers.getPortfolioBalance({
         portfolioId: portfolio.id,
         currencyCode: btc!.currencyCode,
         raw: true,
       });
-      expect(balance!.availableCash).toBeNumericEqual(5);
+      // 5 dividend − 3 fee.
+      expect(balance!.availableCash).toBeNumericEqual(2);
     });
 
     it('skips transactions that the user marked as duplicates via skipTempIds', async () => {
@@ -1121,6 +1125,7 @@ describe('Investment transactions AI import — E2E', () => {
         '"Jan 3, 2024",BTC,bought,PURCHASED,$60.00,0.002,"$30,000.00"',
         '"Jan 10, 2024",BTC,sold,SOLD,-$15.00,-0.0005,"$30,000.00"',
         '"Jan 15, 2024",BTC,Dividend,DIVIDEND,$0.50,--,--',
+        '"Jan 16, 2024",BTC,Dividend debited,DIVIDEND,-$0.10,--,--',
         '"Jan 17, 2024",,M1 Platform Fee,SRVCHG,-$3.00,--,--',
         '"Jan 20, 2024",,PROMO_CREDIT_USER,CASH,$50.00,--,--',
       ].join('\n');
@@ -1155,11 +1160,13 @@ describe('Investment transactions AI import — E2E', () => {
 
       const result = await extract();
       expect(result.warnings.filter((w) => w.includes('were skipped'))).toEqual([]);
+      expect(result.warnings).toContain('1 dividend row(s) had a negative amount and were imported as fees (BTC).');
       const [holding] = result.holdings;
       expect(holding!.transactions.map((t) => [t.side, t.quantity, t.price])).toEqual([
         ['buy', '0.002', '30000'],
         ['sell', '0.0005', '30000'],
         ['dividend', '1', '0.5'],
+        ['fee', '1', '0.1'],
       ]);
       expect(result.cashTransactions.map((t) => [t.kind, t.amount, t.description])).toEqual([
         [INVESTMENT_IMPORT_CASH_CONTRIBUTION, '100', 'ACH deposit'],
@@ -1171,15 +1178,19 @@ describe('Investment transactions AI import — E2E', () => {
         payload: { holdings: result.holdings, cashTransactions: result.cashTransactions, skipTempIds: [] },
         raw: true,
       });
-      expect(executed).toMatchObject({ createdTransactions: 3, createdCashTransactions: 3, failedTransactions: 0 });
+      expect(executed).toMatchObject({ createdTransactions: 4, createdCashTransactions: 3, failedTransactions: 0 });
+      const fee = await InvestmentTransaction.findOne({
+        where: { portfolioId: portfolio.id, category: INVESTMENT_TRANSACTION_CATEGORY.fee },
+      });
+      expect(fee!.transactionType).toBe(TRANSACTION_TYPES.expense);
 
-      // 100 deposit − 60 buy + 15 sell + 0.5 dividend − 3 fee + 50 promo.
+      // 100 deposit − 60 buy + 15 sell + 0.5 dividend − 0.1 dividend fee − 3 platform fee + 50 promo.
       const [balance] = await helpers.getPortfolioBalance({
         portfolioId: portfolio.id,
         currencyCode: 'USD',
         raw: true,
       });
-      expect(balance!.availableCash).toBeNumericEqual(102.5);
+      expect(balance!.availableCash).toBeNumericEqual(102.4);
 
       // Re-importing the same file offers every row as a possible duplicate.
       const again = await extract();

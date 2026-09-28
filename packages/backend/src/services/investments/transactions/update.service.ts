@@ -1,4 +1,3 @@
-import { TRANSACTION_TYPES } from '@bt/shared/types';
 import { ASSET_CLASS, INVESTMENT_TRANSACTION_CATEGORY } from '@bt/shared/types/investments';
 import { INVESTMENT_DECIMAL_SCALE, Money } from '@common/types/money';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
@@ -15,7 +14,7 @@ import { updatePortfolioBalance } from '@services/investments/portfolios/balance
 import { ensureUserCurrencyConnected } from '@services/sharing/auth/ensure-currency-connected.service';
 import { Big } from 'big.js';
 
-import { calculateCashDelta } from './cash-balance-utils';
+import { calculateCashDelta, investmentTransactionType } from './cash-balance-utils';
 import { resolveSettlement } from './settlement-utils';
 
 interface UpdateTransactionParams {
@@ -118,10 +117,7 @@ const updateInvestmentTransactionImpl = async (params: UpdateTransactionParams) 
 
   if (updateFields.category !== undefined) {
     updateData.category = updateFields.category;
-    updateData.transactionType =
-      updateFields.category === INVESTMENT_TRANSACTION_CATEGORY.buy
-        ? TRANSACTION_TYPES.expense
-        : TRANSACTION_TYPES.income;
+    updateData.transactionType = investmentTransactionType({ category: updateFields.category });
   }
 
   if (updateFields.date !== undefined) {

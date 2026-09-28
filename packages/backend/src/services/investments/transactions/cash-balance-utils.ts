@@ -1,3 +1,4 @@
+import { TRANSACTION_TYPES } from '@bt/shared/types';
 import { INVESTMENT_TRANSACTION_CATEGORY } from '@bt/shared/types/investments';
 import { Big } from 'big.js';
 
@@ -42,4 +43,17 @@ export function calculateCashDelta({
       throw new Error(`Unhandled investment transaction category in calculateCashDelta: ${exhaustiveCheck}`);
     }
   }
+}
+
+/** Cash paid out (buy, fee, tax) is an expense; everything else is income. */
+export function investmentTransactionType({
+  category,
+}: {
+  category: INVESTMENT_TRANSACTION_CATEGORY;
+}): TRANSACTION_TYPES {
+  return category === INVESTMENT_TRANSACTION_CATEGORY.buy ||
+    category === INVESTMENT_TRANSACTION_CATEGORY.fee ||
+    category === INVESTMENT_TRANSACTION_CATEGORY.tax
+    ? TRANSACTION_TYPES.expense
+    : TRANSACTION_TYPES.income;
 }

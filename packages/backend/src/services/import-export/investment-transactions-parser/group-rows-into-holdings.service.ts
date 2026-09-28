@@ -13,17 +13,13 @@
  * Output is the hierarchical `InvestmentImportExtractionResult['holdings']`
  * shape consumed by the review UI.
  */
-import { ASSET_CLASS, INVESTMENT_TRANSACTION_CATEGORY, isTradeSide } from '@bt/shared/types/investments';
-import type {
-  InvestmentImportExtractionResult,
-  InvestmentImportTradeSide,
-  InvestmentImportTransactionSide,
-} from '@bt/shared/types/investments';
+import { ASSET_CLASS } from '@bt/shared/types/investments';
+import type { InvestmentImportExtractionResult, InvestmentImportTransactionSide } from '@bt/shared/types/investments';
 import { logger } from '@js/utils';
 import { Big } from 'big.js';
 import { v4 as uuidv4 } from 'uuid';
 
-import { detectInvestmentDuplicates } from './detect-duplicates.service';
+import { type DedupSide, detectInvestmentDuplicates, isDedupSide } from './detect-duplicates.service';
 import { normaliseCurrency, resolveSymbols } from './symbol-resolution.service';
 
 /**
@@ -102,7 +98,7 @@ export async function groupRowsIntoHoldings({
     portfolioId: string;
     securityId: string;
     date: string;
-    side: InvestmentImportTradeSide | 'dividend';
+    side: DedupSide;
     price: string;
     amount: string;
   }> = [];
@@ -134,12 +130,9 @@ export async function groupRowsIntoHoldings({
     const txns = symbolRows.map((row) => {
       const tempId = uuidv4();
       const amount = new Big(row.quantity).times(new Big(row.price)).plus(new Big(row.fees)).toFixed(10);
-      // Trades and dividends carry a price + amount that identify a repeated
-      // event; fees/transfers/etc. don't, so they stay out of the dedup batch.
-      if (
-        (isTradeSide(row.side) || row.side === INVESTMENT_TRANSACTION_CATEGORY.dividend) &&
-        resolved?.resolvedSecurity?.securityId
-      ) {
+      // Trades, dividends, fees and taxes carry a price + amount that identify a
+      // repeated event; transfer/cancel/other don't, so they stay out.
+      if (isDedupSide(row.side) && resolved?.resolvedSecurity?.securityId) {
         rowsForDedup.push({
           tempId,
           portfolioId: defaultPortfolioId,

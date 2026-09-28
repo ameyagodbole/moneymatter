@@ -16,9 +16,9 @@
  * imports are a legitimate outcome anyway (one bad row shouldn't bin the rest).
  * Instead we collect per-row errors and return them.
  */
-import { INVESTMENT_TRANSACTION_CATEGORY, isTradeSide } from '@bt/shared/types/investments';
 import {
   INVESTMENT_IMPORT_CASH_ADJUSTMENT,
+  INVESTMENT_TRANSACTION_CATEGORY,
   type InvestmentImportCashTransaction,
   type InvestmentImportExecuteResponse,
   type InvestmentImportHolding,
@@ -34,6 +34,14 @@ import { syncHistoricalPrices } from '@services/investments/securities-price/his
 import { findSecurityByIdentity } from '@services/investments/securities/identity';
 import { createInvestmentTransaction } from '@services/investments/transactions/create.service';
 import { Big } from 'big.js';
+
+const IMPORTABLE_SIDES = new Set<string>([
+  INVESTMENT_TRANSACTION_CATEGORY.buy,
+  INVESTMENT_TRANSACTION_CATEGORY.sell,
+  INVESTMENT_TRANSACTION_CATEGORY.dividend,
+  INVESTMENT_TRANSACTION_CATEGORY.fee,
+  INVESTMENT_TRANSACTION_CATEGORY.tax,
+]);
 
 interface ExecuteImportParams {
   userId: number;
@@ -203,10 +211,9 @@ export async function executeInvestmentImport({
         continue;
       }
 
-      // `createInvestmentTransaction` types everything-not-buy as income, which
-      // is right for sell/dividend but wrong for fee/tax – reject the rest
-      // instead of silently misclassifying them.
-      if (!isTradeSide(tx.side) && tx.side !== INVESTMENT_TRANSACTION_CATEGORY.dividend) {
+      // Transfer/cancel/other move neither cash nor shares, so an import has
+      // nothing to record for them.
+      if (!IMPORTABLE_SIDES.has(tx.side)) {
         const reason = `Skipped "${holding.parsedSymbol}" ${tx.side} on ${tx.date}: this category is not yet supported.`;
         logger.warn(reason);
         warnings.push(reason);

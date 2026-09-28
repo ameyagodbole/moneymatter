@@ -42,13 +42,20 @@ interface DuplicateCandidate {
   existingTransactionId: string;
 }
 
+/** Sides whose price + amount identify a repeated event. */
+export type DedupSide = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax';
+
+export function isDedupSide(side: string): side is DedupSide {
+  return side === 'buy' || side === 'sell' || side === 'dividend' || side === 'fee' || side === 'tax';
+}
+
 interface ParsedRowForDedup {
   tempId: string;
   portfolioId: string;
   securityId: string;
   /** YYYY-MM-DD. */
   date: string;
-  side: 'buy' | 'sell' | 'dividend';
+  side: DedupSide;
   /** Decimal string. */
   price: string;
   /** Decimal string (`quantity * price + fees`). */

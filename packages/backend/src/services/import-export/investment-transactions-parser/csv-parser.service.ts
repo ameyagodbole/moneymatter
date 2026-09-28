@@ -45,6 +45,8 @@ export interface ParsedCashRow {
 interface ParseInvestmentCsvResult {
   rows: NormalizedInvestmentRow[];
   cashRows: ParsedCashRow[];
+  /** Symbol of each dividend row imported as a fee because its amount was negative. */
+  dividendsImportedAsFees: string[];
   invalidRows: InvalidRow[];
   totalRows: number;
   /**
@@ -225,6 +227,7 @@ export function parseInvestmentCsv({
 
   const rows: NormalizedInvestmentRow[] = [];
   const cashRows: ParsedCashRow[] = [];
+  const dividendsImportedAsFees: string[] = [];
   const invalidRows: InvalidRow[] = [];
   let skippedRowsCount = 0;
 
@@ -299,12 +302,19 @@ export function parseInvestmentCsv({
     let price = parseDecimal(priceRaw);
 
     // A cash dividend reported only as an amount becomes 1 × amount, so the
-    // cash received and every total stay exact.
+    // cash received and every total stay exact. A negative one is money taken
+    // (e.g. an ADR fee charged against the dividend), recorded as a fee on the
+    // same security; the controller warns about each.
+    let rowSide = side;
     const isAmountOnlyDividend =
       side === INVESTMENT_TRANSACTION_CATEGORY.dividend && (!quantity || new Big(quantity).eq(0)) && amount !== null;
     if (isAmountOnlyDividend) {
       quantity = '1';
       price = new Big(amount).abs().toString();
+      if (new Big(amount).lt(0)) {
+        rowSide = INVESTMENT_TRANSACTION_CATEGORY.fee;
+        dividendsImportedAsFees.push(symbol);
+      }
     }
 
     if (!quantity || new Big(quantity).lte(0)) {
@@ -316,7 +326,8 @@ export function parseInvestmentCsv({
     // crypto airdrops / staking rewards that brokers occasionally encode as
     // zero-price buys. Reject only when the source text was completely unparseable.
     if (price === null) {
-      const isTrade = side === INVESTMENT_TRANSACTION_CATEGORY.buy || side === INVESTMENT_TRANSACTION_CATEGORY.sell;
+      const isTrade =
+        rowSide === INVESTMENT_TRANSACTION_CATEGORY.buy || rowSide === INVESTMENT_TRANSACTION_CATEGORY.sell;
       // Trades MUST have a parseable price (even if zero) — a non-numeric value
       // is a parsing failure, not a "free" trade.
       if (isTrade) {
@@ -345,7 +356,7 @@ export function parseInvestmentCsv({
       symbol,
       name,
       date,
-      side,
+      side: rowSide,
       quantity,
       price: price ?? '0',
       fees,
@@ -354,5 +365,5 @@ export function parseInvestmentCsv({
     });
   });
 
-  return { rows, cashRows, invalidRows, totalRows, skippedRowsCount };
+  return { rows, cashRows, dividendsImportedAsFees, invalidRows, totalRows, skippedRowsCount };
 }

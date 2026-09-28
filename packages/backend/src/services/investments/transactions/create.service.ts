@@ -1,4 +1,3 @@
-import { TRANSACTION_TYPES } from '@bt/shared/types';
 import { ASSET_CLASS, INVESTMENT_TRANSACTION_CATEGORY } from '@bt/shared/types/investments';
 import { Money } from '@common/types/money';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
@@ -16,7 +15,7 @@ import { ensureUserCurrencyConnected } from '@services/sharing/auth/ensure-curre
 import { getExchangeRate } from '@services/user-exchange-rate/get-exchange-rate.service';
 import { Big } from 'big.js';
 
-import { calculateCashDelta } from './cash-balance-utils';
+import { calculateCashDelta, investmentTransactionType } from './cash-balance-utils';
 import { resolveSettlement } from './settlement-utils';
 
 interface CreateTxParams {
@@ -199,8 +198,7 @@ const createInvestmentTransactionImpl = async (params: CreateTxParams) => {
     refAmount,
     refPrice,
     refFees,
-    transactionType:
-      category === INVESTMENT_TRANSACTION_CATEGORY.buy ? TRANSACTION_TYPES.expense : TRANSACTION_TYPES.income,
+    transactionType: investmentTransactionType({ category }),
   });
 
   await recalculateHolding({ portfolioId, securityId });

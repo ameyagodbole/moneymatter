@@ -183,7 +183,7 @@ async function extractFromAi({ userId, body }: { userId: number; body: z.infer<t
 async function extractFromCsv({ userId, body }: { userId: number; body: z.infer<typeof csvBody> }) {
   const fileContent = Buffer.from(body.fileBase64, 'base64').toString('utf-8');
 
-  const { rows, cashRows, invalidRows, totalRows, skippedRowsCount } = parseInvestmentCsv({
+  const { rows, cashRows, dividendsImportedAsFees, invalidRows, totalRows, skippedRowsCount } = parseInvestmentCsv({
     fileContent,
     columnMapping: body.columnMapping,
   });
@@ -206,6 +206,12 @@ async function extractFromCsv({ userId, body }: { userId: number; body: z.infer<
     // Without this warning the user wonders why their 500-row file produced
     // only 300 transactions.
     extraWarnings.push(`${skippedRowsCount} row(s) were skipped because their side value was mapped to "Skip".`);
+  }
+  if (dividendsImportedAsFees.length > 0) {
+    const symbols = [...new Set(dividendsImportedAsFees)].join(', ');
+    extraWarnings.push(
+      `${dividendsImportedAsFees.length} dividend row(s) had a negative amount and were imported as fees (${symbols}).`,
+    );
   }
 
   const { holdings, warnings } = await groupRowsIntoHoldings({
