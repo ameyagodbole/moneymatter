@@ -15,7 +15,7 @@ export function registerMergePayees(server: McpServer) {
     'merge_payees',
     {
       description:
-        'Merge a source Payee into a target Payee. Transactions and aliases move to the target; the target wins silently on defaultCategoryId conflict; the source is deleted. Use to dedupe near-duplicates like "Amazon" and "AMZN MKT".',
+        'Merge a source Payee into a target Payee. Transactions and aliases move to the target; the target keeps its defaultCategoryId, otherwise it takes the source category; the source is deleted. Use to dedupe near-duplicates like "Amazon" and "AMZN MKT".',
       inputSchema,
     },
     async (args, extra) => {

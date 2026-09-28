@@ -126,6 +126,29 @@ export async function mergePayees<R extends boolean | undefined = undefined>({
   });
 }
 
+export async function bulkMergePayees<R extends boolean | undefined = undefined>({
+  sourceIds,
+  targetId,
+  defaultCategoryId,
+  raw,
+}: {
+  sourceIds: string[];
+  targetId: string;
+  defaultCategoryId?: string | null;
+  raw?: R;
+}) {
+  return makeRequest<PayeeModel, R>({
+    method: 'post',
+    url: '/payees/merge',
+    payload: {
+      sourcePayeeIds: sourceIds,
+      targetPayeeId: targetId,
+      defaultCategoryId,
+    },
+    raw,
+  });
+}
+
 export async function createPayeeAlias<R extends boolean | undefined = undefined>({
   payeeId,
   rawName,

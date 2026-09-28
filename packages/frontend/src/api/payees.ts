@@ -145,6 +145,22 @@ export const mergePayees = async ({
   return api.post(`/payees/${sourceId}/merge`, { targetPayeeId });
 };
 
+export const bulkMergePayees = async ({
+  sourcePayeeIds,
+  targetPayeeId,
+  defaultCategoryId,
+}: {
+  sourcePayeeIds: string[];
+  targetPayeeId: string;
+  defaultCategoryId?: string | null;
+}): Promise<PayeeModel> => {
+  return api.post('/payees/merge', {
+    sourcePayeeIds,
+    targetPayeeId,
+    defaultCategoryId,
+  });
+};
+
 export const createPayeeAlias = async ({
   payeeId,
   rawName,

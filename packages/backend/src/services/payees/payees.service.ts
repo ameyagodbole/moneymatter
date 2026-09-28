@@ -53,7 +53,9 @@ async function assertCategoryOwnedByUser({
     attributes: ['id'],
   });
   if (!category) {
-    throw new ValidationError({ message: t({ key: 'payees.defaultCategoryNotOwned' }) });
+    throw new ValidationError({
+      message: t({ key: 'payees.defaultCategoryNotOwned' }),
+    });
   }
 }
 
@@ -61,7 +63,9 @@ async function assertTagsOwnedByUser({ userId, tagIds }: { userId: number; tagId
   if (tagIds.length === 0) return;
   const ownedCount = await Tags.count({ where: { id: tagIds, userId } });
   if (ownedCount !== tagIds.length) {
-    throw new ValidationError({ message: t({ key: 'payees.defaultTagsNotOwned' }) });
+    throw new ValidationError({
+      message: t({ key: 'payees.defaultTagsNotOwned' }),
+    });
   }
 }
 
@@ -82,7 +86,12 @@ export async function loadPayeeOrThrow({ userId, id }: { userId: number; id: str
     where: { id, userId },
     include: [
       { model: PayeeAliases, as: 'aliases' },
-      { model: Tags, as: 'defaultTags', attributes: ['id'], through: { attributes: [] } },
+      {
+        model: Tags,
+        as: 'defaultTags',
+        attributes: ['id'],
+        through: { attributes: [] },
+      },
     ],
   });
   if (!payee) {
@@ -166,7 +175,9 @@ export const listPayees = withTransaction(
         requiredPermission: SHARE_PERMISSIONS.read,
       });
       if (!access.granted) {
-        throw new NotFoundError({ message: t({ key: 'accounts.accountNotFoundForTransaction' }) });
+        throw new NotFoundError({
+          message: t({ key: 'accounts.accountNotFoundForTransaction' }),
+        });
       }
       scopedUserId = access.isOwner ? userId : access.ownerUserId!;
       if (!access.isOwner) {
@@ -245,10 +256,19 @@ export const listPayees = withTransaction(
         where: { id: { [Op.in]: ids } },
         include: [
           { model: PayeeAliases, as: 'aliases' },
-          { model: Tags, as: 'defaultTags', attributes: ['id'], through: { attributes: [] } },
+          {
+            model: Tags,
+            as: 'defaultTags',
+            attributes: ['id'],
+            through: { attributes: [] },
+          },
         ],
       }),
-      getPayeeStatsMap({ userId: scopedUserId, payeeIds: ids, accountId: statsAccountId }),
+      getPayeeStatsMap({
+        userId: scopedUserId,
+        payeeIds: ids,
+        accountId: statsAccountId,
+      }),
     ]);
 
     const payeesById = new Map<string, Payees>(payees.map((p) => [p.id, p]));
@@ -323,10 +343,16 @@ export const createPayee = withTransaction(
     logoInitials,
     logoColor,
   }: CreatePayeeParams): Promise<Payees> => {
-    const { display, normalized } = parsePayeeName({ raw: name, emptyMessageKey: 'payees.nameRequired' });
+    const { display, normalized } = parsePayeeName({
+      raw: name,
+      emptyMessageKey: 'payees.nameRequired',
+    });
 
     if (defaultCategoryId) {
-      await assertCategoryOwnedByUser({ userId, categoryId: defaultCategoryId });
+      await assertCategoryOwnedByUser({
+        userId,
+        categoryId: defaultCategoryId,
+      });
     }
     if (defaultTagIds && defaultTagIds.length > 0) {
       await assertTagsOwnedByUser({ userId, tagIds: defaultTagIds });
@@ -339,10 +365,15 @@ export const createPayee = withTransaction(
     const hit = await resolveNormalizedName({ userId, normalized });
     if (hit) {
       if (hit.via === 'canonical') {
-        throw new ConflictError({ message: t({ key: 'payees.duplicateName' }) });
+        throw new ConflictError({
+          message: t({ key: 'payees.duplicateName' }),
+        });
       }
       throw new ConflictError({
-        message: t({ key: 'payees.nameUsedByAliasOfOtherPayee', variables: { name: hit.name } }),
+        message: t({
+          key: 'payees.nameUsedByAliasOfOtherPayee',
+          variables: { name: hit.name },
+        }),
         details: { conflictingPayee: { id: hit.payeeId, name: hit.name } },
       });
     }
@@ -357,7 +388,9 @@ export const createPayee = withTransaction(
       // A supplied logo value is a manual override (`logoSource: 'manual'` makes
       // the resolver treat it as authoritative); null keys on create change
       // nothing, so they resolve to no writes and the resolver stays in charge.
-      ...resolveManualLogoFields({ input: { logoDomain, logoInitials, logoColor } }),
+      ...resolveManualLogoFields({
+        input: { logoDomain, logoInitials, logoColor },
+      }),
     });
     await addPayeeTags({ payeeId: created.id, tagIds: defaultTagIds ?? [] });
     // Covers both the manual POST /payees route and the YNAB import loop.
@@ -378,7 +411,13 @@ interface GetPayeeParams {
 }
 
 export const getPayee = withTransaction(
-  async ({ userId, id }: GetPayeeParams): Promise<{ payee: Payees; stats: PayeeStatsRow | null }> => {
+  async ({
+    userId,
+    id,
+  }: GetPayeeParams): Promise<{
+    payee: Payees;
+    stats: PayeeStatsRow | null;
+  }> => {
     const payee = await loadPayeeOrThrow({ userId, id });
     const statsMap = await getPayeeStatsMap({ userId, payeeIds: [id] });
     await backfillLogosForUnresolved({ payees: [payee] });
@@ -426,7 +465,10 @@ export const updatePayee = withTransaction(
     if (defaultCategoryId === null) {
       payee.defaultCategoryId = null;
     } else if (defaultCategoryId !== undefined) {
-      await assertCategoryOwnedByUser({ userId, categoryId: defaultCategoryId });
+      await assertCategoryOwnedByUser({
+        userId,
+        categoryId: defaultCategoryId,
+      });
       payee.defaultCategoryId = defaultCategoryId as RecordId;
     }
 
@@ -440,7 +482,10 @@ export const updatePayee = withTransaction(
     }
 
     if (name !== undefined) {
-      const { display, normalized } = parsePayeeName({ raw: name, emptyMessageKey: 'payees.nameRequired' });
+      const { display, normalized } = parsePayeeName({
+        raw: name,
+        emptyMessageKey: 'payees.nameRequired',
+      });
 
       if (normalized !== payee.normalizedName) {
         // Renaming onto a name already in the namespace – another Payee's
@@ -480,7 +525,11 @@ export const updatePayee = withTransaction(
     payee.set(
       resolveManualLogoFields({
         input: { logoDomain, logoInitials, logoColor },
-        stored: { logoDomain: payee.logoDomain, logoInitials: payee.logoInitials, logoColor: payee.logoColor },
+        stored: {
+          logoDomain: payee.logoDomain,
+          logoInitials: payee.logoInitials,
+          logoColor: payee.logoColor,
+        },
       }),
     );
 
@@ -520,7 +569,12 @@ interface DeletePayeeParams {
 
 export const deletePayee = withTransaction(async ({ userId, id }: DeletePayeeParams): Promise<void> => {
   const payee = await loadPayeeOrThrow({ userId, id });
-  await pauseAutomationsReferencing({ userId, refType: 'payee', refId: payee.id, label: payee.name });
+  await pauseAutomationsReferencing({
+    userId,
+    refType: 'payee',
+    refId: payee.id,
+    label: payee.name,
+  });
   // FK `SET NULL` on `Transactions.payeeId` unlinks transactions automatically.
   // Aliases cascade-delete via FK.
   await Payees.destroy({ where: { id, userId } });
@@ -534,7 +588,8 @@ interface MergePayeesParams {
 
 /**
  * Move all transactions + aliases from source → target, then delete source.
- * Target's `defaultCategoryId` wins silently on conflict.
+ * The target keeps a single default category: its own when set, otherwise the
+ * source's.
  */
 export const mergePayees = withTransaction(
   async ({ userId, sourceId, targetId }: MergePayeesParams): Promise<Payees> => {
@@ -562,7 +617,12 @@ export const mergePayees = withTransaction(
     await Subscriptions.update({ payeeId: target.id }, { where: { userId, payeeId: source.id } });
     await TransactionTemplates.update({ payeeId: target.id }, { where: { userId, payeeId: source.id } });
 
-    await rewriteAutomationRef({ userId, refType: 'payee', from: source.id, to: target.id });
+    await rewriteAutomationRef({
+      userId,
+      refType: 'payee',
+      from: source.id,
+      to: target.id,
+    });
 
     // `categorizationMeta.payeeId` on previously-categorized rows still points
     // at the source id after merge – accepted as an audit-only dangling
@@ -594,10 +654,64 @@ export const mergePayees = withTransaction(
 
     // Union the source's default tags into the target so the auto-tagging
     // rule survives the merge.
-    await addPayeeTags({ payeeId: target.id, tagIds: (source.defaultTags ?? []).map((tag) => tag.id) });
+    await addPayeeTags({
+      payeeId: target.id,
+      tagIds: (source.defaultTags ?? []).map((tag) => tag.id),
+    });
+
+    if (!target.defaultCategoryId && source.defaultCategoryId) {
+      await Payees.update({ defaultCategoryId: source.defaultCategoryId }, { where: { id: target.id, userId } });
+    }
 
     await Payees.destroy({ where: { id: source.id, userId } });
     return loadPayeeOrThrow({ userId, id: target.id });
+  },
+);
+
+export const MAX_BULK_MERGE_SOURCES = 100;
+
+interface BulkMergePayeesParams {
+  userId: number;
+  sourceIds: string[];
+  targetId: string;
+  /**
+   * The merged Payee's default category. Omitted: the target's own, otherwise
+   * the first source (in `sourceIds` order) that has one. `null` clears it.
+   */
+  defaultCategoryId?: string | null;
+}
+
+/**
+ * Merge several Payees into one target in a single transaction: either every
+ * source merges or none does. Each source goes through `mergePayees`, so a
+ * bulk merge leaves exactly the state the same sequence of single merges would.
+ */
+export const bulkMergePayees = withTransaction(
+  async ({ userId, sourceIds, targetId, defaultCategoryId }: BulkMergePayeesParams): Promise<Payees> => {
+    const uniqueSourceIds = [...new Set(sourceIds)];
+    if (uniqueSourceIds.includes(targetId)) {
+      throw new ValidationError({ message: t({ key: 'payees.mergeSelf' }) });
+    }
+    if (defaultCategoryId) {
+      await assertCategoryOwnedByUser({
+        userId,
+        categoryId: defaultCategoryId,
+      });
+    }
+
+    // Load everything up front so a foreign or missing id fails with 404
+    // before any row moves.
+    await Promise.all([targetId, ...uniqueSourceIds].map((id) => loadPayeeOrThrow({ userId, id })));
+
+    for (const sourceId of uniqueSourceIds) {
+      await mergePayees({ userId, sourceId, targetId });
+    }
+
+    if (defaultCategoryId !== undefined) {
+      await Payees.update({ defaultCategoryId }, { where: { id: targetId, userId } });
+    }
+
+    return loadPayeeOrThrow({ userId, id: targetId });
   },
 );
 
@@ -623,7 +737,10 @@ export const createPayeeAlias = withTransaction(
   async ({ userId, payeeId, rawName }: CreatePayeeAliasParams): Promise<Payees> => {
     await loadPayeeOrThrow({ userId, id: payeeId });
 
-    const { display, normalized } = parsePayeeName({ raw: rawName, emptyMessageKey: 'payees.aliasNameRequired' });
+    const { display, normalized } = parsePayeeName({
+      raw: rawName,
+      emptyMessageKey: 'payees.aliasNameRequired',
+    });
 
     // The alias only adds value when its normalized form isn't already a
     // path to one of this user's Payees – otherwise the insert would break
@@ -632,10 +749,15 @@ export const createPayeeAlias = withTransaction(
     const hit = await resolveNormalizedName({ userId, normalized });
     if (hit) {
       if (hit.payeeId === payeeId) {
-        throw new ConflictError({ message: t({ key: 'payees.duplicateAlias' }) });
+        throw new ConflictError({
+          message: t({ key: 'payees.duplicateAlias' }),
+        });
       }
       throw new ConflictError({
-        message: t({ key: 'payees.aliasUsedByOtherPayee', variables: { name: hit.name } }),
+        message: t({
+          key: 'payees.aliasUsedByOtherPayee',
+          variables: { name: hit.name },
+        }),
         details: { conflictingPayee: { id: hit.payeeId, name: hit.name } },
       });
     }
@@ -678,7 +800,9 @@ export const deletePayeeAlias = withTransaction(
       throw new NotFoundError({ message: t({ key: 'payees.aliasNotFound' }) });
     }
     if (alias.normalizedName === payee.normalizedName) {
-      throw new ValidationError({ message: t({ key: 'payees.cannotDeleteCanonicalAlias' }) });
+      throw new ValidationError({
+        message: t({ key: 'payees.cannotDeleteCanonicalAlias' }),
+      });
     }
     await PayeeAliases.destroy({ where: { id: aliasId, payeeId } });
   },

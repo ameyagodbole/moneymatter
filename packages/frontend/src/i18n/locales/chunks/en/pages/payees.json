@@ -29,6 +29,21 @@
       "delete": "Delete",
       "deleteAndIgnore": "Delete & ignore"
     },
+    "bulkMerge": {
+      "selectedCount": "{count} payee selected | {count} payees selected",
+      "tooMany": "You can merge up to {max} payees at once",
+      "clearSelection": "Clear selection",
+      "mergeButton": "Merge",
+      "selectPayee": "Select {name}",
+      "title": "Merge {count} payees",
+      "description": "Pick the payee to keep. The others are deleted, and their transactions, aliases and default tags move to it. This can't be undone.",
+      "keepLabel": "Payee to keep",
+      "transactionCount": "no transactions | {count} transaction | {count} transactions",
+      "categoryLabel": "Default category",
+      "noCategory": "No default category",
+      "confirm": "Merge payees",
+      "success": "Merged {count} payees into {name}"
+    },
     "emptyState": {
       "title": "No payees yet",
       "description": "Connect a bank to detect payees automatically, or create one manually."

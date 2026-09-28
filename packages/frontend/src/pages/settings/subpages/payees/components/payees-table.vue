@@ -28,43 +28,43 @@
 
       <!-- Wide column header row -->
       <div
-        :class="[
-          'bg-muted text-muted-foreground hidden gap-3 border-b px-3 py-2 text-xs font-medium tracking-wider uppercase @3xl/payees-table:grid',
-          DESKTOP_GRID,
-        ]"
+        class="bg-muted text-muted-foreground hidden border-b text-xs font-medium tracking-wider uppercase @3xl/payees-table:flex"
       >
-        <SortHeaderButton
-          :label="$t('payees.columns.name')"
-          :active="sortBy === 'name'"
-          :dir="sortDir"
-          @click="setSort('name')"
-        />
-        <SortHeaderButton
-          :label="$t('payees.columns.transactionCount')"
-          align="right"
-          :active="sortBy === 'transactionCount'"
-          :dir="sortDir"
-          @click="setSort('transactionCount')"
-        />
-        <SortHeaderButton
-          :label="$t('payees.columns.netFlow')"
-          align="right"
-          :active="sortBy === 'netFlow'"
-          :dir="sortDir"
-          @click="setSort('netFlow')"
-        />
-        <span class="flex items-center gap-1">
-          <span>{{ $t('payees.columns.category') }}</span>
-          <ResponsiveTooltip :delay-duration="100" :content="$t('payees.columns.categoryHint')">
-            <InfoIcon class="size-3 cursor-help" @click.prevent.stop />
-          </ResponsiveTooltip>
-        </span>
-        <SortHeaderButton
-          :label="$t('payees.columns.defaultTags')"
-          :active="sortBy === 'defaultTagsCount'"
-          :dir="sortDir"
-          @click="setSort('defaultTagsCount')"
-        />
+        <span :class="CHECKBOX_CELL_CLASS" />
+        <div :class="['grid flex-1 gap-3 py-2 pr-3', DESKTOP_GRID]">
+          <SortHeaderButton
+            :label="$t('payees.columns.name')"
+            :active="sortBy === 'name'"
+            :dir="sortDir"
+            @click="setSort('name')"
+          />
+          <SortHeaderButton
+            :label="$t('payees.columns.transactionCount')"
+            align="right"
+            :active="sortBy === 'transactionCount'"
+            :dir="sortDir"
+            @click="setSort('transactionCount')"
+          />
+          <SortHeaderButton
+            :label="$t('payees.columns.netFlow')"
+            align="right"
+            :active="sortBy === 'netFlow'"
+            :dir="sortDir"
+            @click="setSort('netFlow')"
+          />
+          <span class="flex items-center gap-1">
+            <span>{{ $t('payees.columns.category') }}</span>
+            <ResponsiveTooltip :delay-duration="100" :content="$t('payees.columns.categoryHint')">
+              <InfoIcon class="size-3 cursor-help" @click.prevent.stop />
+            </ResponsiveTooltip>
+          </span>
+          <SortHeaderButton
+            :label="$t('payees.columns.defaultTags')"
+            :active="sortBy === 'defaultTagsCount'"
+            :dir="sortDir"
+            @click="setSort('defaultTagsCount')"
+          />
+        </div>
       </div>
 
       <!-- Loading state -->
@@ -77,8 +77,12 @@
         <div class="bg-muted mx-auto mb-3 flex size-12 items-center justify-center rounded-full">
           <PackageOpenIcon class="text-muted-foreground size-6" />
         </div>
-        <p class="text-foreground mb-1 text-sm font-medium">{{ $t('payees.emptyState.title') }}</p>
-        <p class="text-muted-foreground text-xs">{{ $t('payees.emptyState.description') }}</p>
+        <p class="text-foreground mb-1 text-sm font-medium">
+          {{ $t('payees.emptyState.title') }}
+        </p>
+        <p class="text-muted-foreground text-xs">
+          {{ $t('payees.emptyState.description') }}
+        </p>
       </div>
 
       <!-- Virtualized rows -->
@@ -97,98 +101,141 @@
               transform: `translateY(${virtualRow.start}px)`,
             }"
           >
-            <router-link
+            <div
               v-if="list[virtualRow.index]"
-              :to="{ name: ROUTES_NAMES.settingsPayeeDetail, params: { id: list[virtualRow.index]!.id } }"
-              class="hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:ring-ring block border-b px-3 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              :class="
+                cn(
+                  'hover:bg-muted/40 flex border-b transition-colors',
+                  isSelected(list[virtualRow.index]!) && 'bg-muted/60',
+                )
+              "
             >
-              <!-- Compact (card) -->
-              <div class="flex flex-col gap-1.5 @3xl/payees-table:hidden">
-                <div class="flex items-center gap-2">
-                  <BrandLogo
-                    :domain="list[virtualRow.index]!.logoDomain ?? null"
-                    :initials="list[virtualRow.index]!.logoInitials ?? null"
-                    :color="list[virtualRow.index]!.logoColor ?? null"
-                    :name="list[virtualRow.index]!.name"
-                    class="size-7 shrink-0"
-                  />
-                  <span class="text-foreground truncate text-sm font-medium">
-                    {{ list[virtualRow.index]!.name }}
-                  </span>
+              <div :class="CHECKBOX_CELL_CLASS">
+                <Checkbox
+                  :model-value="isSelected(list[virtualRow.index]!)"
+                  :aria-label="
+                    $t('payees.bulkMerge.selectPayee', {
+                      name: list[virtualRow.index]!.name,
+                    })
+                  "
+                  @update:model-value="toggleSelected(list[virtualRow.index]!)"
+                />
+              </div>
+              <router-link
+                :to="{
+                  name: ROUTES_NAMES.settingsPayeeDetail,
+                  params: { id: list[virtualRow.index]!.id },
+                }"
+                class="focus-visible:bg-muted/40 focus-visible:ring-ring block min-w-0 flex-1 py-2 pr-3 focus-visible:ring-2 focus-visible:outline-none"
+              >
+                <!-- Compact (card) -->
+                <div class="flex flex-col gap-1.5 @3xl/payees-table:hidden">
+                  <div class="flex items-center gap-2">
+                    <BrandLogo
+                      :domain="list[virtualRow.index]!.logoDomain ?? null"
+                      :initials="list[virtualRow.index]!.logoInitials ?? null"
+                      :color="list[virtualRow.index]!.logoColor ?? null"
+                      :name="list[virtualRow.index]!.name"
+                      class="size-7 shrink-0"
+                    />
+                    <span class="text-foreground truncate text-sm font-medium">
+                      {{ list[virtualRow.index]!.name }}
+                    </span>
+                  </div>
+                  <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                    <dt class="text-muted-foreground">
+                      {{ $t('payees.columns.transactionCount') }}
+                    </dt>
+                    <dd class="text-right tabular-nums">
+                      {{ list[virtualRow.index]!.stats?.transactionCount ?? 0 }}
+                    </dd>
+                    <dt class="text-muted-foreground">
+                      {{ $t('payees.columns.netFlow') }}
+                    </dt>
+                    <dd
+                      class="text-right tabular-nums"
+                      :class="netFlowClass(list[virtualRow.index]!.stats?.netFlowRef ?? 0)"
+                    >
+                      {{ formatNetFlow(list[virtualRow.index]!.stats?.netFlowRef ?? 0) }}
+                    </dd>
+                    <dt class="text-muted-foreground flex items-center gap-1">
+                      <span>{{ $t('payees.columns.category') }}</span>
+                      <ResponsiveTooltip :delay-duration="100" :content="$t('payees.columns.categoryHint')">
+                        <InfoIcon class="size-3 cursor-help" @click.prevent.stop />
+                      </ResponsiveTooltip>
+                    </dt>
+                    <dd class="flex min-w-0 justify-end">
+                      <CategoryDisplay
+                        :category-id="
+                          list[virtualRow.index]!.defaultCategoryId ??
+                          list[virtualRow.index]!.stats?.topCategoryId ??
+                          null
+                        "
+                      />
+                    </dd>
+                    <dt class="text-muted-foreground">
+                      {{ $t('payees.columns.defaultTags') }}
+                    </dt>
+                    <dd class="flex min-w-0 justify-end">
+                      <TagsIndicator
+                        :tags="
+                          payeeTags({
+                            ids: list[virtualRow.index]!.defaultTagIds,
+                          })
+                        "
+                      />
+                      <span
+                        v-if="list[virtualRow.index]!.defaultTagIds.length === 0"
+                        class="text-muted-foreground text-sm"
+                        >—</span
+                      >
+                    </dd>
+                  </dl>
                 </div>
-                <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                  <dt class="text-muted-foreground">{{ $t('payees.columns.transactionCount') }}</dt>
-                  <dd class="text-right tabular-nums">
+
+                <!-- Wide (grid row) -->
+                <div :class="['hidden items-center gap-3 text-sm @3xl/payees-table:grid', DESKTOP_GRID]">
+                  <div class="flex min-w-0 items-center gap-2">
+                    <BrandLogo
+                      :domain="list[virtualRow.index]!.logoDomain ?? null"
+                      :initials="list[virtualRow.index]!.logoInitials ?? null"
+                      :color="list[virtualRow.index]!.logoColor ?? null"
+                      :name="list[virtualRow.index]!.name"
+                      class="size-7 shrink-0"
+                    />
+                    <span class="truncate font-medium">{{ list[virtualRow.index]!.name }}</span>
+                  </div>
+                  <span class="text-right tabular-nums">
                     {{ list[virtualRow.index]!.stats?.transactionCount ?? 0 }}
-                  </dd>
-                  <dt class="text-muted-foreground">{{ $t('payees.columns.netFlow') }}</dt>
-                  <dd
+                  </span>
+                  <span
                     class="text-right tabular-nums"
                     :class="netFlowClass(list[virtualRow.index]!.stats?.netFlowRef ?? 0)"
                   >
                     {{ formatNetFlow(list[virtualRow.index]!.stats?.netFlowRef ?? 0) }}
-                  </dd>
-                  <dt class="text-muted-foreground flex items-center gap-1">
-                    <span>{{ $t('payees.columns.category') }}</span>
-                    <ResponsiveTooltip :delay-duration="100" :content="$t('payees.columns.categoryHint')">
-                      <InfoIcon class="size-3 cursor-help" @click.prevent.stop />
-                    </ResponsiveTooltip>
-                  </dt>
-                  <dd class="flex min-w-0 justify-end">
-                    <CategoryDisplay
-                      :category-id="
-                        list[virtualRow.index]!.defaultCategoryId ??
-                        list[virtualRow.index]!.stats?.topCategoryId ??
-                        null
+                  </span>
+                  <CategoryDisplay
+                    :category-id="
+                      list[virtualRow.index]!.defaultCategoryId ?? list[virtualRow.index]!.stats?.topCategoryId ?? null
+                    "
+                  />
+                  <span class="flex min-w-0 items-center">
+                    <TagsIndicator
+                      :tags="
+                        payeeTags({
+                          ids: list[virtualRow.index]!.defaultTagIds,
+                        })
                       "
                     />
-                  </dd>
-                  <dt class="text-muted-foreground">{{ $t('payees.columns.defaultTags') }}</dt>
-                  <dd class="flex min-w-0 justify-end">
-                    <TagsIndicator :tags="payeeTags({ ids: list[virtualRow.index]!.defaultTagIds })" />
                     <span
                       v-if="list[virtualRow.index]!.defaultTagIds.length === 0"
                       class="text-muted-foreground text-sm"
                       >—</span
                     >
-                  </dd>
-                </dl>
-              </div>
-
-              <!-- Wide (grid row) -->
-              <div :class="['hidden items-center gap-3 text-sm @3xl/payees-table:grid', DESKTOP_GRID]">
-                <div class="flex min-w-0 items-center gap-2">
-                  <BrandLogo
-                    :domain="list[virtualRow.index]!.logoDomain ?? null"
-                    :initials="list[virtualRow.index]!.logoInitials ?? null"
-                    :color="list[virtualRow.index]!.logoColor ?? null"
-                    :name="list[virtualRow.index]!.name"
-                    class="size-7 shrink-0"
-                  />
-                  <span class="truncate font-medium">{{ list[virtualRow.index]!.name }}</span>
+                  </span>
                 </div>
-                <span class="text-right tabular-nums">
-                  {{ list[virtualRow.index]!.stats?.transactionCount ?? 0 }}
-                </span>
-                <span
-                  class="text-right tabular-nums"
-                  :class="netFlowClass(list[virtualRow.index]!.stats?.netFlowRef ?? 0)"
-                >
-                  {{ formatNetFlow(list[virtualRow.index]!.stats?.netFlowRef ?? 0) }}
-                </span>
-                <CategoryDisplay
-                  :category-id="
-                    list[virtualRow.index]!.defaultCategoryId ?? list[virtualRow.index]!.stats?.topCategoryId ?? null
-                  "
-                />
-                <span class="flex min-w-0 items-center">
-                  <TagsIndicator :tags="payeeTags({ ids: list[virtualRow.index]!.defaultTagIds })" />
-                  <span v-if="list[virtualRow.index]!.defaultTagIds.length === 0" class="text-muted-foreground text-sm"
-                    >—</span
-                  >
-                </span>
-              </div>
-            </router-link>
+              </router-link>
+            </div>
             <div v-else class="text-muted-foreground border-b px-3 py-3 text-center text-xs">
               {{ $t('payees.loadingMore') }}
             </div>
@@ -201,6 +248,7 @@
 
 <script setup lang="ts">
 import { Button as UiButton } from '@/components/lib/ui/button';
+import { Checkbox } from '@/components/lib/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -212,7 +260,8 @@ import { useInfinitePayees } from '@/composable/data-queries/payees';
 import { useVirtualizerScrollMemory } from '@/composable/use-virtualizer-scroll-memory';
 import { useVirtualizedInfiniteScroll } from '@/composable/virtualized-infinite-scroll';
 import { ROUTES_NAMES } from '@/routes/constants';
-import type { PayeeSortBy, PayeeSortDir } from '@/api/payees';
+import type { PayeeSortBy, PayeeSortDir, PayeeWithStats } from '@/api/payees';
+import { cn } from '@/lib/utils';
 import ResponsiveTooltip from '@/components/common/responsive-tooltip.vue';
 import { useTagsStore } from '@/stores';
 import type { RecordId } from '@bt/shared/types';
@@ -242,10 +291,24 @@ const COMPACT_ROW_ESTIMATE_PX = 164;
 const WIDE_ROW_ESTIMATE_PX = 48;
 const DESKTOP_GRID = 'grid-cols-[2fr_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1.2fr)]';
 const NET_FLOW_FALLBACK_CURRENCY = 'USD';
+const CHECKBOX_CELL_CLASS = 'flex w-10 shrink-0 items-center justify-center';
 
 const props = defineProps<{
   searchQuery?: string;
 }>();
+
+// Full rows rather than ids: a selection survives search changes, so selected
+// Payees may not be in the currently loaded list.
+const selected = defineModel<PayeeWithStats[]>('selected', {
+  default: () => [],
+});
+const selectedIds = computed(() => new Set(selected.value.map((payee) => payee.id)));
+const isSelected = (payee: PayeeWithStats) => selectedIds.value.has(payee.id);
+const toggleSelected = (payee: PayeeWithStats) => {
+  selected.value = isSelected(payee)
+    ? selected.value.filter((item) => item.id !== payee.id)
+    : [...selected.value, payee];
+};
 
 const { t, locale } = useI18n();
 

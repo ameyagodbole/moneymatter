@@ -7,6 +7,7 @@ import {
   UpdatePayeePayload,
   addIgnoredName,
   applyPayeeTagsToExisting,
+  bulkMergePayees,
   bulkUpdateCategorizationMode,
   createPayee,
   createPayeeAlias,
@@ -264,8 +265,12 @@ export const usePayee = ({
 
 export const invalidatePayeesScope = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.payeesList });
-  queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.payeesLookup });
-  queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.payeesByAccount });
+  queryClient.invalidateQueries({
+    queryKey: VUE_QUERY_CACHE_KEYS.payeesLookup,
+  });
+  queryClient.invalidateQueries({
+    queryKey: VUE_QUERY_CACHE_KEYS.payeesByAccount,
+  });
   queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.payeeById });
 };
 
@@ -300,7 +305,9 @@ export const useApplyPayeeTagsToExisting = () => {
     onSuccess: () => {
       // Tagged transactions surface in transaction lists/details – refresh
       // everything transaction-shaped alongside the payee scope.
-      queryClient.invalidateQueries({ queryKey: [VUE_QUERY_GLOBAL_PREFIXES.transactionChange] });
+      queryClient.invalidateQueries({
+        queryKey: [VUE_QUERY_GLOBAL_PREFIXES.transactionChange],
+      });
       invalidatePayeesScope(queryClient);
     },
   });
@@ -312,6 +319,20 @@ export const useMergePayees = () => {
     mutationFn: ({ sourceId, targetPayeeId }: { sourceId: string; targetPayeeId: string }) =>
       mergePayees({ sourceId, targetPayeeId }),
     onSuccess: () => invalidatePayeesScope(queryClient),
+  });
+};
+
+export const useBulkMergePayees = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: bulkMergePayees,
+    onSuccess: () => {
+      invalidatePayeesScope(queryClient);
+      // Merged transactions now point at the surviving Payee.
+      queryClient.invalidateQueries({
+        queryKey: [VUE_QUERY_GLOBAL_PREFIXES.transactionChange],
+      });
+    },
   });
 };
 
@@ -332,7 +353,9 @@ export const useDeletePayeeAlias = () => {
 };
 
 const invalidateIgnoredNames = (queryClient: ReturnType<typeof useQueryClient>) => {
-  queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.payeesIgnoredNames });
+  queryClient.invalidateQueries({
+    queryKey: VUE_QUERY_CACHE_KEYS.payeesIgnoredNames,
+  });
 };
 
 export const useIgnoredNames = () => {

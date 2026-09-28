@@ -1,6 +1,7 @@
 import {
   addIgnoredName,
   applyTagsToExisting,
+  bulkMergePayees,
   bulkUpdateCategorizationMode,
   createPayee,
   createPayeeAlias,
@@ -38,6 +39,14 @@ router.patch(
   checkBaseCurrencyLock,
   validateEndpoint(bulkUpdateCategorizationMode.schema),
   bulkUpdateCategorizationMode.handler,
+);
+
+router.post(
+  '/merge',
+  authenticateSession,
+  checkBaseCurrencyLock,
+  validateEndpoint(bulkMergePayees.schema),
+  bulkMergePayees.handler,
 );
 
 // Ignored-names sub-resource. Routes precede `/:id` patterns so Express's
