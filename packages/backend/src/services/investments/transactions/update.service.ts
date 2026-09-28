@@ -1,5 +1,6 @@
 import { ASSET_CLASS, INVESTMENT_TRANSACTION_CATEGORY } from '@bt/shared/types/investments';
 import { INVESTMENT_DECIMAL_SCALE, Money } from '@common/types/money';
+import { toUtcDateString } from '@common/utils/date';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
 import { t } from '@i18n/index';
 import { ValidationError } from '@js/errors';
@@ -11,6 +12,8 @@ import { calculateRefAmount } from '@services/calculate-ref-amount.service';
 import { withTransaction } from '@services/common/with-transaction';
 import { recalculateHolding } from '@services/investments/holdings/recalculation.service';
 import { updatePortfolioBalance } from '@services/investments/portfolios/balances';
+import { loadSplitsBySecurity } from '@services/investments/splits/load-splits';
+import { toCurrentShareBasis } from '@services/investments/splits/share-basis';
 import { ensureUserCurrencyConnected } from '@services/sharing/auth/ensure-currency-connected.service';
 import { Big } from 'big.js';
 
@@ -71,18 +74,29 @@ const updateInvestmentTransactionImpl = async (params: UpdateTransactionParams) 
   const isCrypto = holding.security?.assetClass === ASSET_CLASS.crypto;
   if (finalCategory === INVESTMENT_TRANSACTION_CATEGORY.sell && !isCrypto) {
     // Calculate what the quantity would be after removing this transaction's effect
-    // then check if we have enough for the new quantity
+    // then check if we have enough for the new quantity. The holding counts
+    // shares in today's basis, so both quantities are converted across splits.
+    const splits = (await loadSplitsBySecurity({ securityIds: [securityId] })).get(securityId) ?? [];
     let adjustedHoldingQuantity = holding.quantity.toBig();
+    const originalQuantity = toCurrentShareBasis({
+      quantity: transaction.quantity.toBig(),
+      date: toUtcDateString(transaction.date),
+      splits,
+    });
 
     // If this transaction was originally a buy, we need to subtract its quantity
     // If it was originally a sell, we need to add its quantity back
     if (transaction.category === INVESTMENT_TRANSACTION_CATEGORY.buy) {
-      adjustedHoldingQuantity = adjustedHoldingQuantity.minus(transaction.quantity.toBig());
+      adjustedHoldingQuantity = adjustedHoldingQuantity.minus(originalQuantity);
     } else if (transaction.category === INVESTMENT_TRANSACTION_CATEGORY.sell) {
-      adjustedHoldingQuantity = adjustedHoldingQuantity.plus(transaction.quantity.toBig());
+      adjustedHoldingQuantity = adjustedHoldingQuantity.plus(originalQuantity);
     }
 
-    const sellQuantity = new Big(finalQuantity);
+    const sellQuantity = toCurrentShareBasis({
+      quantity: finalQuantity,
+      date: updateFields.date ?? toUtcDateString(transaction.date),
+      splits,
+    });
 
     if (sellQuantity.gt(adjustedHoldingQuantity)) {
       throw new ValidationError({

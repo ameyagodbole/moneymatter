@@ -2,6 +2,7 @@ import { SECURITY_PROVIDER, SecuritySearchResult } from '@bt/shared/types/invest
 import { sleep } from '@common/helpers';
 import { logger } from '@js/utils';
 import SecurityCurrencyCache from '@models/investments/security-currency-cache.model';
+import type { SplitEvent } from '@services/investments/splits/share-basis';
 import { subYears } from 'date-fns';
 import { Op } from 'sequelize';
 import YahooFinance from 'yahoo-finance2';
@@ -21,6 +22,9 @@ import { ISIN_PATTERN, mapYahooTypeToAssetClass, remapUcitsType, toIsoCurrency, 
 
 const DEFAULT_HISTORY_YEARS = 5;
 const CURRENCY_RESOLVE_CONCURRENCY = 5;
+
+/** Earliest date asked for when looking up splits: the whole available history. */
+const SPLIT_HISTORY_START = '1970-01-01';
 
 export class YahooDataProvider extends BaseSecurityDataProvider {
   readonly providerName = SECURITY_PROVIDER.yahoo;
@@ -141,6 +145,27 @@ export class YahooDataProvider extends BaseSecurityDataProvider {
       return results;
     } catch (error) {
       throw this.formatProviderError({ operation: 'Yahoo Finance search failed', error });
+    }
+  }
+
+  /**
+   * Every split of the security as ex-date + ratio. Only the events are needed,
+   * so a monthly interval keeps the price payload that comes with them small.
+   */
+  public async getSplits(providerSymbol: ProviderSymbol): Promise<SplitEvent[]> {
+    try {
+      const chartResult = await this.client.chart(providerSymbol, {
+        period1: SPLIT_HISTORY_START,
+        interval: '1mo',
+        events: 'split',
+      });
+      return (chartResult.events?.splits ?? []).map((split) => ({
+        date: split.date.toISOString().slice(0, 10),
+        numerator: String(split.numerator),
+        denominator: String(split.denominator),
+      }));
+    } catch (error) {
+      throw this.formatProviderError({ operation: 'Yahoo Finance split lookup failed', error });
     }
   }
 

@@ -10,6 +10,7 @@ import SecurityPricing from '@models/investments/security-pricing.model';
 import UserExchangeRates from '@models/user-exchange-rates.model';
 import UsersCurrencies from '@models/users-currencies.model';
 import { API_LAYER_BASE_CURRENCY_CODE } from '@services/exchange-rates/constants';
+import { loadSplitsBySecurity } from '@services/investments/splits/load-splits';
 import { buildUsdRateLookup } from '@services/stats/build-usd-rate-lookup';
 import { getScopedEnabledPortfolios } from '@services/stats/utils';
 import { endOfDay, format, parseISO, startOfDay, subDays } from 'date-fns';
@@ -167,6 +168,8 @@ export const calculatePortfolioValueByDate = async ({
 
   const securityIds = [...new Set(transactions.map((tx) => tx.securityId))];
 
+  const splitsBySecurity = await loadSplitsBySecurity({ securityIds });
+
   // Prices are quoted in the security's own currency, which is not necessarily
   // the transaction's cash-leg currency (a USD-settled ASML.AS buy, say). `symbol`
   // and `name` are carried only to label any holding the report can't price when
@@ -272,6 +275,7 @@ export const calculatePortfolioValueByDate = async ({
   const unpricedDates = new Set<string>();
 
   const holdingsValueByDate = computeHoldingsValueByDate({
+    splitsBySecurity,
     uniqueDates: snapshotDates,
     portfolioIds,
     transactionsByPortfolio: Map.groupBy(transactions, (tx) => tx.portfolioId),

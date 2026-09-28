@@ -12,6 +12,7 @@ import UserExchangeRates from '@models/user-exchange-rates.model';
 import UsersCurrencies from '@models/users-currencies.model';
 import { withTransaction } from '@services/common/with-transaction';
 import { API_LAYER_BASE_CURRENCY_CODE } from '@services/exchange-rates/constants';
+import { loadSplitsBySecurity } from '@services/investments/splits/load-splits';
 import { buildUsdRateLookup } from '@services/stats/build-usd-rate-lookup';
 import { getAggregatedBalanceHistory } from '@services/stats/get-balance-history';
 import { fetchSavingsTransactions, generatePeriodBuckets, getScopedEnabledPortfolios } from '@services/stats/utils';
@@ -256,6 +257,8 @@ const calculateInvestmentSlice = async ({
 
   const securityIds = [...new Set(transactions.map((tx) => tx.securityId))];
 
+  const splitsBySecurity = await loadSplitsBySecurity({ securityIds });
+
   // Prices are quoted in the security's own currency, which is not necessarily
   // the transaction's cash-leg currency (a USD-settled ASML.AS buy, say). `symbol`
   // and `name` are carried only to label any holding the report can't price when
@@ -373,6 +376,7 @@ const calculateInvestmentSlice = async ({
   const perPortfolioHoldings = portfolios.map((portfolio) => ({
     portfolio,
     valueByDate: computeHoldingsValueByDate({
+      splitsBySecurity,
       uniqueDates: boundaryDates,
       portfolioIds: [portfolio.id],
       transactionsByPortfolio,

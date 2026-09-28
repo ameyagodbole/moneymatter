@@ -11,6 +11,8 @@ import { calculateRefAmount } from '@services/calculate-ref-amount.service';
 import { withTransaction } from '@services/common/with-transaction';
 import { recalculateHolding } from '@services/investments/holdings/recalculation.service';
 import { updatePortfolioBalance } from '@services/investments/portfolios/balances';
+import { loadSplitsBySecurity } from '@services/investments/splits/load-splits';
+import { toCurrentShareBasis } from '@services/investments/splits/share-basis';
 import { ensureUserCurrencyConnected } from '@services/sharing/auth/ensure-currency-connected.service';
 import { getExchangeRate } from '@services/user-exchange-rate/get-exchange-rate.service';
 import { Big } from 'big.js';
@@ -97,8 +99,11 @@ const createInvestmentTransactionImpl = async (params: CreateTxParams) => {
   // Stocks have exact share counts, so we keep the strict check.
   const isCrypto = holding.security?.assetClass === ASSET_CLASS.crypto;
   if (category === INVESTMENT_TRANSACTION_CATEGORY.sell && !isCrypto) {
+    // The holding counts shares in today's basis; a sell dated before a split
+    // is converted to it before comparing.
     const currentQty = new Big(holding.quantity.toDecimalString(10));
-    if (new Big(quantity).gt(currentQty)) {
+    const splits = (await loadSplitsBySecurity({ securityIds: [securityId] })).get(securityId) ?? [];
+    if (toCurrentShareBasis({ quantity, date, splits }).gt(currentQty)) {
       throw new ValidationError({
         message: 'Cannot sell more shares than currently owned.',
       });

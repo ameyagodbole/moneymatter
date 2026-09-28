@@ -107,6 +107,7 @@ import {
   ListIcon,
   Loader2Icon,
   RefreshCwIcon,
+  SplitIcon,
   type LucideIcon,
 } from '@lucide/vue';
 import { computed, ref, toRef } from 'vue';
@@ -138,6 +139,7 @@ const getCashDirection = (item: PortfolioActivityItem): number => {
 };
 
 const getIcon = (item: PortfolioActivityItem): LucideIcon => {
+  if (item.type === 'split') return SplitIcon;
   if (item.type === 'transfer' && item.direction === 'exchange') return RefreshCwIcon;
   if (item.type === 'investment' && item.category === INVESTMENT_TRANSACTION_CATEGORY.dividend) return CoinsIcon;
   const direction = getCashDirection(item);
@@ -150,6 +152,7 @@ const getLabel = (item: PortfolioActivityItem): string => {
   if (item.type === 'investment') {
     return [item.category.toUpperCase(), item.securitySymbol].filter(Boolean).join(' ');
   }
+  if (item.type === 'split') return ['SPLIT', item.securitySymbol].filter(Boolean).join(' ');
   if (item.direction === 'exchange') return t('portfolioDetail.cashBalances.cashTransactions.exchange');
   if (item.counterparty === 'external') {
     return item.direction === 'in'
@@ -161,9 +164,10 @@ const getLabel = (item: PortfolioActivityItem): string => {
     : t('portfolioDetail.cashBalances.cashTransactions.transferOut');
 };
 
-/** Secondary line: units × price for trades, the description for cash rows. */
+/** Secondary line: units × price for trades, the ratio for splits, the description for cash rows. */
 const getDetail = (item: PortfolioActivityItem): string | null => {
   if (item.type === 'transfer') return item.description;
+  if (item.type === 'split') return `${Number(item.numerator)}:${Number(item.denominator)}`;
   if (item.category !== INVESTMENT_TRANSACTION_CATEGORY.buy && item.category !== INVESTMENT_TRANSACTION_CATEGORY.sell) {
     return null;
   }

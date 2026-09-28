@@ -13,6 +13,7 @@ import UserExchangeRates from '@models/user-exchange-rates.model';
 import UsersCurrencies from '@models/users-currencies.model';
 import { withTransaction } from '@services/common/with-transaction';
 import { API_LAYER_BASE_CURRENCY_CODE } from '@services/exchange-rates/constants';
+import { loadSplitsBySecurity } from '@services/investments/splits/load-splits';
 import { buildUsdRateLookup } from '@services/stats/build-usd-rate-lookup';
 import { calculateVehiclesBalanceHistory } from '@services/stats/calculate-vehicles-balance-history';
 import { calculateVentureBalanceHistory } from '@services/stats/calculate-venture-balance-history';
@@ -139,6 +140,8 @@ const calculatePortfolioBalanceHistory = async ({
   }
 
   const securityIds = [...new Set(transactions.map((t) => t.securityId))];
+
+  const splitsBySecurity = await loadSplitsBySecurity({ securityIds });
 
   // Look up securities to get the *security's* native currency and asset class.
   // Transactions store the cash-leg currency (often the brokerage's settlement
@@ -276,6 +279,7 @@ const calculatePortfolioBalanceHistory = async ({
   const unpricedDates = new Set<string>();
 
   const holdingsValueByDate = computeHoldingsValueByDate({
+    splitsBySecurity,
     uniqueDates,
     portfolioIds,
     transactionsByPortfolio,

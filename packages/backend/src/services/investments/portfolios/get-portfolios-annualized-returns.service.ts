@@ -10,6 +10,8 @@ import SecurityPricing from '@models/investments/security-pricing.model';
 import UserExchangeRates from '@models/user-exchange-rates.model';
 import UsersCurrencies from '@models/users-currencies.model';
 import { API_LAYER_BASE_CURRENCY_CODE } from '@services/exchange-rates/constants';
+import { loadSplitsBySecurity } from '@services/investments/splits/load-splits';
+import { toCurrentShareBasis } from '@services/investments/splits/share-basis';
 import { differenceInDays, endOfDay, format, parseISO, startOfDay, subDays } from 'date-fns';
 import { Op } from 'sequelize';
 
@@ -132,6 +134,7 @@ export const getPortfoliosAnnualizedReturns = async ({
   })) as unknown as TransactionRow[];
 
   const securityIds = [...new Set(transactions.map((t) => t.securityId))];
+  const splitsBySecurity = await loadSplitsBySecurity({ securityIds });
 
   type SecurityRow = Pick<Securities, 'id' | 'currencyCode' | 'assetClass'>;
   const securities: SecurityRow[] = securityIds.length
@@ -420,7 +423,12 @@ export const getPortfoliosAnnualizedReturns = async ({
       // oversell (allowed for crypto) doesn't corrupt the basis used as the
       // no-price valuation fallback.
       for (const tx of tradesByDate.get(boundaryDate) ?? []) {
-        const quantity = Number(tx.quantity);
+        // Today's share basis, to match the split-adjusted prices it is valued at.
+        const quantity = toCurrentShareBasis({
+          quantity: tx.quantity,
+          date: boundaryDate,
+          splits: splitsBySecurity.get(tx.securityId) ?? [],
+        }).toNumber();
         const totalAmount = Number(tx.refAmount) + Number(tx.refFees);
         const holding = holdings.get(tx.securityId) ?? { quantity: 0, costBasis: 0 };
 

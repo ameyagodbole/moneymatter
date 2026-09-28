@@ -37,4 +37,15 @@ export interface PortfolioActivityTransferItem extends PortfolioActivityItemBase
   description: string | null;
 }
 
-export type PortfolioActivityItem = PortfolioActivityInvestmentItem | PortfolioActivityTransferItem;
+/** A stock split of a held security: shares multiplied by `numerator / denominator`, no cash moved. */
+export interface PortfolioActivitySplitItem extends PortfolioActivityItemBase {
+  type: 'split';
+  securitySymbol: string | null;
+  numerator: string;
+  denominator: string;
+}
+
+export type PortfolioActivityItem =
+  | PortfolioActivityInvestmentItem
+  | PortfolioActivityTransferItem
+  | PortfolioActivitySplitItem;

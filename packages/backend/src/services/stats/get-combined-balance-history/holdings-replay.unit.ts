@@ -58,6 +58,7 @@ const noopRate = () => 1;
 describe('computeHoldingsValueByDate', () => {
   it('returns an empty map when uniqueDates is empty', () => {
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: [],
       portfolioIds: ['p1'],
       transactionsByPortfolio: new Map(),
@@ -70,6 +71,7 @@ describe('computeHoldingsValueByDate', () => {
 
   it('emits zero for every day when the portfolio has no transactions', () => {
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10', '2024-05-11'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: new Map(),
@@ -93,6 +95,7 @@ describe('computeHoldingsValueByDate', () => {
       }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -101,6 +104,25 @@ describe('computeHoldingsValueByDate', () => {
       getExchangeRate: noopRate,
     });
     expect(result.get('2024-05-10')).toBe(1100);
+  });
+
+  it('values shares bought before a split in today’s basis, matching split-adjusted prices', () => {
+    // 1 share bought before a 3-for-1 split is 3 shares today. Split-adjusted
+    // history prices it at 100 (the real 300 / 3) on both sides of the split,
+    // so the position is worth 300 before and after: the split changes nothing.
+    const transactions = [
+      tx({ category: INVESTMENT_TRANSACTION_CATEGORY.buy, date: '2024-01-02', quantity: 1, refAmount: 300 }),
+    ];
+    const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map([['sec-1', [{ date: '2024-06-01', numerator: '3', denominator: '1' }]]]),
+      uniqueDates: ['2024-05-31', '2024-06-01'],
+      portfolioIds: ['p1'],
+      transactionsByPortfolio: groupByPortfolio(transactions),
+      securitiesById: securityMap(stockSecurity('sec-1')),
+      findPriceForDate: () => 100,
+      getExchangeRate: noopRate,
+    });
+    expect([result.get('2024-05-31'), result.get('2024-06-01')]).toEqual([300, 300]);
   });
 
   it('falls back to cost basis when no price exists on or before the snapshot date', () => {
@@ -114,6 +136,7 @@ describe('computeHoldingsValueByDate', () => {
       }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -133,6 +156,7 @@ describe('computeHoldingsValueByDate', () => {
     ];
     const missing: { securityId: string; dateStr: string }[] = [];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10', '2024-05-11'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -154,6 +178,7 @@ describe('computeHoldingsValueByDate', () => {
     ];
     const missing: { securityId: string; dateStr: string }[] = [];
     computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -176,6 +201,7 @@ describe('computeHoldingsValueByDate', () => {
       }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10', '2024-05-11'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -197,6 +223,7 @@ describe('computeHoldingsValueByDate', () => {
       tx({ category: INVESTMENT_TRANSACTION_CATEGORY.sell, date: '2024-05-11', quantity: 3, refAmount: 360 }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10', '2024-05-11'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -220,6 +247,7 @@ describe('computeHoldingsValueByDate', () => {
       tx({ category: INVESTMENT_TRANSACTION_CATEGORY.buy, date: '2024-05-10', quantity: 8, refAmount: 400 }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10', '2024-05-11'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -231,6 +259,7 @@ describe('computeHoldingsValueByDate', () => {
 
     // Now with no price, fall back to costBasis = 150.
     const fallback = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -249,6 +278,7 @@ describe('computeHoldingsValueByDate', () => {
       tx({ category: INVESTMENT_TRANSACTION_CATEGORY.buy, date: '2024-05-10', quantity: 3, refAmount: 150 }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -266,6 +296,7 @@ describe('computeHoldingsValueByDate', () => {
       tx({ category: INVESTMENT_TRANSACTION_CATEGORY.sell, date: '2024-05-09', quantity: 2, refAmount: 0 }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -281,6 +312,7 @@ describe('computeHoldingsValueByDate', () => {
       tx({ category: INVESTMENT_TRANSACTION_CATEGORY.sell, date: '2024-05-09', quantity: 2, refAmount: 0 }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -305,6 +337,7 @@ describe('computeHoldingsValueByDate', () => {
       }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -327,6 +360,7 @@ describe('computeHoldingsValueByDate', () => {
       }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10'],
       portfolioIds: ['p1'],
       transactionsByPortfolio: groupByPortfolio(transactions),
@@ -357,6 +391,7 @@ describe('computeHoldingsValueByDate', () => {
       }),
     ];
     const result = computeHoldingsValueByDate({
+      splitsBySecurity: new Map(),
       uniqueDates: ['2024-05-10'],
       portfolioIds: ['p1', 'p2'],
       transactionsByPortfolio: groupByPortfolio(transactions),

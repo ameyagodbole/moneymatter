@@ -1,4 +1,4 @@
-import { ASSET_CLASS, SECURITY_PROVIDER } from '@bt/shared/types/investments';
+import { ASSET_CLASS, INVESTMENT_TRANSACTION_CATEGORY, SECURITY_PROVIDER } from '@bt/shared/types/investments';
 import Coingecko from '@coingecko/coingecko-typescript';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ERROR_CODES } from '@js/errors';
@@ -736,7 +736,10 @@ describe('Securities Daily Sync Service (via API Endpoint)', () => {
 
       // The chart request must cover the trailing lookback window, not just yesterday.
       const expectedPeriod1 = format(subDays(yesterdayMidnightUtc, STOCKS_LOOKBACK_DAYS - 1), 'yyyy-MM-dd');
-      const chartCall = mockedYahooChart.mock.calls.filter((call) => (call[0] as string) === 'AAPL').at(-1);
+      // The split lookup's chart call (events: 'split') follows the price call; skip it.
+      const chartCall = mockedYahooChart.mock.calls
+        .filter((call) => (call[0] as string) === 'AAPL' && (call[1] as { events?: string }).events !== 'split')
+        .at(-1);
       expect(chartCall).toBeDefined();
       expect((chartCall![1] as { period1: string }).period1).toBe(expectedPeriod1);
 
@@ -811,6 +814,64 @@ describe('Securities Daily Sync Service (via API Endpoint)', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (Securities as any).findAll = originalFindAll;
       }
+    });
+  });
+
+  describe('Stock splits', () => {
+    it('applies a split found during the sync to shares held, keeping cost basis, so the full position can be sold', async () => {
+      await helpers.createInvestmentTransaction({
+        payload: {
+          portfolioId: investmentPortfolio.id,
+          securityId: usSecurity.id,
+          category: INVESTMENT_TRANSACTION_CATEGORY.buy,
+          date: '2024-01-02',
+          quantity: '1',
+          price: '100',
+        },
+      });
+      const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+      mockedYahooChart.mockImplementation((symbol: string, options: { events?: string }) =>
+        Promise.resolve(
+          options.events === 'split'
+            ? {
+                quotes: [],
+                events: {
+                  splits:
+                    symbol === usSecurity.providerSymbol
+                      ? [{ date: new Date('2024-06-10T13:30:00Z'), numerator: 4, denominator: 1, splitRatio: '4:1' }]
+                      : [],
+                },
+              }
+            : { quotes: [{ date: new Date(yesterday), close: 150, adjclose: 150 }] },
+        ),
+      );
+
+      expect((await helpers.triggerSecuritiesSync()).statusCode).toBe(200);
+
+      const [holding] = await helpers.getHoldings({
+        portfolioId: investmentPortfolio.id,
+        payload: { securityId: usSecurity.id },
+        raw: true,
+      });
+      expect(holding!.quantity).toBeNumericEqual(4);
+      expect(holding!.costBasis).toBeNumericEqual(100);
+
+      const sell = await helpers.createInvestmentTransaction({
+        payload: {
+          portfolioId: investmentPortfolio.id,
+          securityId: usSecurity.id,
+          category: INVESTMENT_TRANSACTION_CATEGORY.sell,
+          date: '2025-01-02',
+          quantity: '4',
+          price: '50',
+        },
+      });
+      expect(sell.statusCode).toBe(201);
+
+      const { data } = await helpers.getPortfolioActivity({ portfolioId: investmentPortfolio.id, raw: true });
+      expect(data.filter((item) => item.type === 'split')).toEqual([
+        expect.objectContaining({ date: '2024-06-10', numerator: '4', denominator: '1' }),
+      ]);
     });
   });
 

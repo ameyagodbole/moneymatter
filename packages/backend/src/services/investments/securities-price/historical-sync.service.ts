@@ -7,6 +7,7 @@ import { withLock } from '@services/common/lock';
 import { withTransaction } from '@services/common/with-transaction';
 import { dataProviderFactory } from '@services/investments/data-providers';
 import { PriceData, toProviderSymbol } from '@services/investments/data-providers/base-provider';
+import { syncSecuritySplits } from '@services/investments/splits/sync-security-splits.service';
 import { subYears } from 'date-fns';
 
 import { bucketByUtcDay } from './pricing-anchor';
@@ -79,6 +80,7 @@ const syncHistoricalPricesImpl = async (securityId: string): Promise<{ count: nu
     `Submitted ${dailyPrices.length} historical price points (bucketed from ${prices.length} provider points; ` +
       `existing rows were skipped via ignoreDuplicates) for ${security.symbol ?? security.providerSymbol}.`,
   );
+  await syncSecuritySplits({ securityIds: [securityId] });
   return { count: dailyPrices.length };
 };
 

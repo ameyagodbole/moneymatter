@@ -5,6 +5,7 @@ import Portfolios from '@models/investments/portfolios.model';
 import Securities from '@models/investments/securities.model';
 import SecurityPricing from '@models/investments/security-pricing.model';
 import { withLock } from '@services/common/lock';
+import { syncSecuritySplits } from '@services/investments/splits/sync-security-splits.service';
 import { subDays } from 'date-fns';
 import { Op, WhereOptions } from 'sequelize';
 
@@ -368,15 +369,18 @@ const securitiesPricesSyncImpl = async (options: SyncOptions): Promise<Securitie
  * bar's own day. Held under a stocks-specific lock so it doesn't serialize
  * against the hourly crypto sync.
  */
-export const securitiesPricesStocksDailySync = withLock('lock:sync:securities-prices:stocks', () => {
+export const securitiesPricesStocksDailySync = withLock('lock:sync:securities-prices:stocks', async () => {
   const yesterdayMidnightUtc = startOfDayUtc(subDays(new Date(), 1));
-  return securitiesPricesSyncImpl({
+  const result = await securitiesPricesSyncImpl({
     assetClassWhere: { assetClass: { [Op.notIn]: [ASSET_CLASS.crypto] } },
     forDate: yesterdayMidnightUtc,
     fetchStartDate: subDays(yesterdayMidnightUtc, STOCKS_LOOKBACK_DAYS - 1),
     prepareBars: bucketByUtcDay,
     label: 'stocks-daily',
   });
+  // Picks up new splits (and backfills existing installs) for every held stock.
+  await syncSecuritySplits();
+  return result;
 });
 
 /**

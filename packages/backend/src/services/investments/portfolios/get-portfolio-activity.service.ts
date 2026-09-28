@@ -2,6 +2,7 @@ import type {
   PortfolioActivityCashAmount,
   PortfolioActivityInvestmentItem,
   PortfolioActivityItem,
+  PortfolioActivitySplitItem,
   PortfolioActivityTransferItem,
 } from '@bt/shared/types/investments';
 import { toUtcDateString } from '@common/utils/date';
@@ -12,6 +13,7 @@ import PortfolioBalances from '@models/investments/portfolio-balances.model';
 import PortfolioTransfers from '@models/investments/portfolio-transfers.model';
 import Portfolios from '@models/investments/portfolios.model';
 import Securities from '@models/investments/securities.model';
+import { loadSplitsBySecurity } from '@services/investments/splits/load-splits';
 import { calculateCashDelta } from '@services/investments/transactions/cash-balance-utils';
 import { Big } from 'big.js';
 import { Op } from 'sequelize';
@@ -80,7 +82,39 @@ const toTransferItem = ({
 };
 
 /**
- * Every trade, dividend, fee and cash movement of a portfolio in one
+ * Splits of the portfolio's securities from each one's first trade on. A split
+ * takes effect at the open, before its day's trades, so it sorts below them.
+ */
+const toSplitItems = async ({ transactions }: { transactions: InvestmentTransaction[] }): Promise<SortableItem[]> => {
+  const firstTradeBySecurity = new Map<string, InvestmentTransaction>();
+  for (const tx of transactions) {
+    const first = firstTradeBySecurity.get(tx.securityId);
+    if (!first || tx.date < first.date) firstTradeBySecurity.set(tx.securityId, tx);
+  }
+  const splitsBySecurity = await loadSplitsBySecurity({ securityIds: [...firstTradeBySecurity.keys()] });
+
+  return [...splitsBySecurity].flatMap(([securityId, splits]) => {
+    const firstTrade = firstTradeBySecurity.get(securityId)!;
+    return splits
+      .filter((split) => split.date > toUtcDateString(firstTrade.date))
+      .map((split) => {
+        const item: PortfolioActivitySplitItem = {
+          type: 'split',
+          id: `${securityId}-${split.date}`,
+          date: split.date,
+          securitySymbol: firstTrade.security?.symbol ?? null,
+          numerator: split.numerator,
+          denominator: split.denominator,
+          cashChanges: [],
+          balancesAfter: [],
+        };
+        return { item, createdAt: new Date(0) };
+      });
+  });
+};
+
+/**
+ * Every trade, dividend, fee, split and cash movement of a portfolio in one
  * newest-first list, each with the cash balance it left behind.
  *
  * Balances are anchored on the stored `PortfolioBalances`, like the combined
@@ -120,6 +154,7 @@ export async function getPortfolioActivity({
   const data = [
     ...transactions.map((tx) => toInvestmentItem({ tx })),
     ...transfers.map((transfer) => toTransferItem({ transfer, portfolioId })),
+    ...(await toSplitItems({ transactions })),
   ]
     .toSorted((a, b) => b.item.date.localeCompare(a.item.date) || b.createdAt.getTime() - a.createdAt.getTime())
     .map(({ item }) => item);

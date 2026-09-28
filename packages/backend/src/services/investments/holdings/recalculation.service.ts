@@ -1,11 +1,14 @@
 import { ASSET_CLASS } from '@bt/shared/types/investments';
 import { Money } from '@common/types/money';
+import { toUtcDateString } from '@common/utils/date';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
 import { t } from '@i18n/index';
 import Holdings from '@models/investments/holdings.model';
 import InvestmentTransaction from '@models/investments/investment-transaction.model';
 import Securities from '@models/investments/securities.model';
 import { withTransaction } from '@services/common/with-transaction';
+import { loadSplitsBySecurity } from '@services/investments/splits/load-splits';
+import { toCurrentShareBasis } from '@services/investments/splits/share-basis';
 
 import { computeHoldingTotals } from './holding-totals';
 
@@ -37,6 +40,9 @@ const recalculateHoldingImpl = async (holdingId: { portfolioId: string; security
     ],
   });
 
+  // Quantities are counted in today's share basis so trades on either side of
+  // a split add up; amounts (and so cost basis) are unaffected by splits.
+  const splits = (await loadSplitsBySecurity({ securityIds: [holding.securityId] })).get(holding.securityId) ?? [];
   const {
     quantity: totalQuantity,
     costBasis: totalCostBasis,
@@ -44,7 +50,7 @@ const recalculateHoldingImpl = async (holdingId: { portfolioId: string; security
   } = computeHoldingTotals({
     transactions: transactions.map((tx) => ({
       category: tx.category,
-      quantity: tx.quantity.toBig(),
+      quantity: toCurrentShareBasis({ quantity: tx.quantity.toBig(), date: toUtcDateString(tx.date), splits }),
       amount: tx.amount.toBig(),
       refAmount: tx.refAmount.toBig(),
     })),

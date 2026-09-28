@@ -1,5 +1,6 @@
 import { ASSET_CLASS, INVESTMENT_TRANSACTION_CATEGORY } from '@bt/shared/types';
 import { toUtcDateString } from '@common/utils/date';
+import { type SplitEvent, toCurrentShareBasis } from '@services/investments/splits/share-basis';
 
 import type { HoldingState, SecurityRow, TransactionRow } from './types';
 
@@ -25,6 +26,7 @@ export const computeHoldingsValueByDate = ({
   portfolioIds,
   transactionsByPortfolio,
   securitiesById,
+  splitsBySecurity,
   findPriceForDate,
   getExchangeRate,
   onMissingPrice,
@@ -33,6 +35,8 @@ export const computeHoldingsValueByDate = ({
   portfolioIds: string[];
   transactionsByPortfolio: Map<string, TransactionRow[]>;
   securitiesById: Map<string, SecurityRow>;
+  /** Splits per security; quantities are replayed in today's share basis to match split-adjusted prices. */
+  splitsBySecurity: Map<string, SplitEvent[]>;
   findPriceForDate: (securityId: string, targetDate: string) => number | null;
   getExchangeRate: (currencyCode: string, dateStr: string) => number;
   onMissingPrice?: ({ securityId, dateStr }: { securityId: string; dateStr: string }) => void;
@@ -67,7 +71,11 @@ export const computeHoldingsValueByDate = ({
         const securityId = tx.securityId;
         // Raw rows carry DECIMALs as strings (see `TransactionRow`); this replay
         // runs on floats anyway, so plain Number() conversion loses nothing.
-        const quantity = Number(tx.quantity);
+        const quantity = toCurrentShareBasis({
+          quantity: tx.quantity,
+          date: toUtcDateString(tx.date),
+          splits: splitsBySecurity.get(securityId) ?? [],
+        }).toNumber();
         // `refAmount` is the leg's full cost in base currency — quantity × price
         // *including* fees, as `resolveSettlement` composes it. That is exactly
         // what `computeHoldingTotals` folds into the basis, so `refFees` must not
