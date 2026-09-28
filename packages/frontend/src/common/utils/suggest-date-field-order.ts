@@ -154,3 +154,14 @@ export function countMismatchedDateCells({
 export function detectDateSeparator({ values }: { values: string[] }): string | null {
   return detectAmbiguousDateSeparator({ values: meaningfulValues({ values }) });
 }
+
+/** An order is picked and, when the custom format is chosen, its pattern isn't blank. */
+export function isDateFormatDecided({
+  dateFieldOrder,
+  datePattern,
+}: {
+  dateFieldOrder: DateFieldOrder | null;
+  datePattern: string | null;
+}): boolean {
+  return !!dateFieldOrder && (datePattern === null || datePattern.trim() !== '');
+}

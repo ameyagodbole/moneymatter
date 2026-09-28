@@ -94,7 +94,7 @@ const routes: RouteRecordRaw[] = [
         name: ROUTES_NAMES.portfolioTransactionsImport,
         component: () => import('@/pages/portfolios/transactions-import/page.vue'),
         meta: {
-          i18nChunks: ['pages/investments-import', 'pages/portfolio-detail'] as I18nChunkName[],
+          i18nChunks: ['pages/investments-import', 'pages/portfolio-detail', 'pages/import-csv'] as I18nChunkName[],
         },
       },
       {

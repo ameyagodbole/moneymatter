@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { extractInvestmentTransactions } from '@/api/investment-transactions-import';
+import { isDateFormatDecided } from '@/common/utils/suggest-date-field-order';
+import DateFormatPicker from '@/components/common/date-format-picker.vue';
 import SelectField from '@/components/fields/select-field.vue';
 import { Button } from '@/components/lib/ui/button';
 import { Callout } from '@/components/lib/ui/callout';
@@ -19,6 +21,7 @@ import {
   type InvestmentImportSideSkip,
   type InvestmentImportTransactionSide,
 } from '@bt/shared/types/investments';
+import type { DateFieldOrder } from '@bt/shared/types';
 import { useMutation } from '@tanstack/vue-query';
 import { ArrowLeftIcon, InfoIcon, Loader2Icon, SparklesIcon } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
@@ -65,7 +68,9 @@ const AUTO_PICK_PATTERNS: Record<keyof InvestmentColumnMapping, string[]> = {
   fees: ['fees', 'fee', 'commission', 'costs'],
   currency: ['currency', 'ccy', 'quote currency'],
   name: ['name', 'description', 'security name'],
-  // These two aren't headers — never auto-picked.
+  // These aren't headers — never auto-picked.
+  dateFieldOrder: [],
+  datePattern: [],
   defaultCurrency: [],
   defaultAssetClassHint: [],
   sideValueMapping: [],
@@ -127,6 +132,26 @@ const priceColumn = ref<string | null>(initialColumn('price'));
 const feesColumn = ref<string | null>(initialColumn('fees'));
 const currencyColumn = ref<string | null>(initialColumn('currency'));
 const nameColumn = ref<string | null>(initialColumn('name'));
+
+const dateFieldOrder = ref<DateFieldOrder | null>(props.initialMapping?.dateFieldOrder ?? null);
+const datePattern = ref<string | null>(props.initialMapping?.datePattern ?? null);
+
+// A different column's cells may follow another format — confirm it again.
+watch(dateColumn, () => {
+  dateFieldOrder.value = null;
+  datePattern.value = null;
+});
+
+/** Non-empty cells of the mapped date column, for the format suggestion and preview. */
+const dateColumnValues = computed<string[]>(() => {
+  const column = dateColumn.value;
+  if (!column) return [];
+  return props.parseResult.preview.map((row) => (row[column] ?? '').trim()).filter(Boolean);
+});
+
+const isDateFormatReady = computed(() =>
+  isDateFormatDecided({ dateFieldOrder: dateFieldOrder.value, datePattern: datePattern.value }),
+);
 
 const defaultCurrency = ref<string>(props.initialMapping?.defaultCurrency ?? 'USD');
 const defaultAssetClassHint = ref<'crypto' | 'stocks'>(props.initialMapping?.defaultAssetClassHint ?? 'stocks');
@@ -212,6 +237,7 @@ const requiredFilled = computed(
   () =>
     !!symbolColumn.value &&
     !!dateColumn.value &&
+    isDateFormatReady.value &&
     !!sideColumn.value &&
     !!quantityColumn.value &&
     !!priceColumn.value &&
@@ -227,6 +253,7 @@ const submitAttempted = ref(false);
 const invalidFields = computed(() => ({
   symbol: submitAttempted.value && !symbolColumn.value,
   date: submitAttempted.value && !dateColumn.value,
+  dateFormat: submitAttempted.value && !!dateColumn.value && !isDateFormatReady.value,
   side: submitAttempted.value && !sideColumn.value,
   quantity: submitAttempted.value && !quantityColumn.value,
   price: submitAttempted.value && !priceColumn.value,
@@ -250,6 +277,8 @@ function buildMapping(): InvestmentColumnMapping {
   return {
     symbol: symbolColumn.value!,
     date: dateColumn.value!,
+    dateFieldOrder: dateFieldOrder.value!,
+    datePattern: datePattern.value?.trim() || undefined,
     side: sideColumn.value!,
     quantity: quantityColumn.value!,
     price: priceColumn.value!,
@@ -429,6 +458,18 @@ const extract = useMutation({
               :class="fieldErrorClass(invalidFields.price)"
               :data-mapping-invalid="invalidFields.price ? 'true' : null"
               @update:model-value="(o: ColumnOption | null) => (priceColumn = o?.value ?? null)"
+            />
+          </div>
+          <div
+            v-if="dateColumn"
+            class="mt-3"
+            :class="fieldErrorClass(invalidFields.dateFormat)"
+            :data-mapping-invalid="invalidFields.dateFormat ? 'true' : null"
+          >
+            <DateFormatPicker
+              v-model:field-order="dateFieldOrder"
+              v-model:pattern="datePattern"
+              :values="dateColumnValues"
             />
           </div>
         </div>

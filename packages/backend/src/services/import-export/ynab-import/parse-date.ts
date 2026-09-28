@@ -1,5 +1,5 @@
-import { parseImportDate } from '@bt/shared/import-export/date-engine';
 import { type DateFieldOrder } from '@bt/shared/types';
+import { parseImportDay } from '@services/import-export/core/parse/parse-date';
 
 /** Year-last date with two 1-2 digit lead fields — the only shape whose
  *  day/month order is not intrinsic. Mirrors the date engine's family. */
@@ -22,23 +22,7 @@ export function parseYnabDate({
   raw: string | null | undefined;
   fieldOrder: DateFieldOrder;
 }): string | null {
-  if (raw === null || raw === undefined) return null;
-  const trimmed = raw.trim();
-  if (trimmed === '') return null;
-
-  const parsed = parseImportDate({ value: trimmed, format: { fieldOrder } });
-  if (!parsed) return null;
-
-  const { year, month, day } =
-    parsed.kind === 'instant'
-      ? {
-          year: parsed.instant.getUTCFullYear(),
-          month: parsed.instant.getUTCMonth() + 1,
-          day: parsed.instant.getUTCDate(),
-        }
-      : parsed;
-
-  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  return parseImportDay({ raw, format: { fieldOrder } });
 }
 
 /**

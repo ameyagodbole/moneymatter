@@ -1,3 +1,4 @@
+import { isDateFormatDecided } from '@/common/utils/suggest-date-field-order';
 /**
  * Projects the wizard's working `ColumnMapping` onto the always-complete
  * `ColumnMappingConfig` wire payload sent to the backend.
@@ -12,7 +13,7 @@
 import type { ColumnMappingConfig } from '@bt/shared/types';
 
 import type { ColumnMapping } from './build-initial-mapping';
-import { isAccountDecided, isCategoryDecided, isCurrencyDecided, isDateFormatDecided } from './field-decision';
+import { isAccountDecided, isCategoryDecided, isCurrencyDecided } from './field-decision';
 
 export function toColumnMappingConfig({ mapping }: { mapping: ColumnMapping }): ColumnMappingConfig | null {
   const { date, dateFieldOrder, datePattern, amount, category, account, currency, transactionType } = mapping;

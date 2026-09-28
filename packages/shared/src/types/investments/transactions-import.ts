@@ -9,6 +9,7 @@
  * (the parents) with the original transactions hanging off them as children.
  * The user edits both levels and commits.
  */
+import type { DateFieldOrder } from '../import-export';
 import type { StatementFileType } from '../statement-parser';
 import type { ASSET_CLASS, INVESTMENT_TRANSACTION_CATEGORY, SECURITY_PROVIDER } from './enums';
 
@@ -155,6 +156,11 @@ export interface InvestmentImportHolding {
 export interface InvestmentColumnMapping {
   symbol: string;
   date: string;
+  /** User-confirmed day/month order applied to the whole `date` column. */
+  dateFieldOrder: DateFieldOrder;
+  /** Custom date-fns pattern for the `date` column. When set, it replaces every
+   *  built-in shape and `dateFieldOrder` is ignored. */
+  datePattern?: string;
   side: string;
   quantity: string;
   price: string;

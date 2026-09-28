@@ -16,7 +16,7 @@ import {
   type InvestmentImportTransactionSide,
 } from '@bt/shared/types/investments';
 import { ValidationError } from '@js/errors';
-import { parseDate } from '@services/import-export/core/parse/parse-date';
+import { parseImportDay } from '@services/import-export/core/parse/parse-date';
 import { Big } from 'big.js';
 import { parse } from 'csv-parse/sync';
 
@@ -215,7 +215,10 @@ export function parseInvestmentCsv({
     const { symbol, currency: tickerCurrency } = splitCompoundTicker({ raw: rawSymbol });
 
     const dateRaw = readCell({ row: dataRow, header: columnMapping.date, headers });
-    const date = parseDate(dateRaw);
+    const date = parseImportDay({
+      raw: dateRaw,
+      format: { fieldOrder: columnMapping.dateFieldOrder, pattern: columnMapping.datePattern },
+    });
     if (!date) {
       invalidRows.push({ rowIndex, reason: `Unparseable date "${dateRaw}"` });
       return;

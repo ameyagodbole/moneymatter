@@ -23,6 +23,7 @@ import type { AccountMappingConfig } from '@bt/shared/types';
 type UnpriceableRow = NonNullable<DetectDuplicatesResponse['unpriceableRows']>[number];
 import { executeImport as executeImportApi, getCsvImportStatus } from '@/api/import-export';
 import { VUE_QUERY_CACHE_KEYS, VUE_QUERY_GLOBAL_PREFIXES } from '@/common/const/vue-query';
+import { isDateFormatDecided } from '@/common/utils/suggest-date-field-order';
 import { useCategoryMappingPresets } from '@/composable/use-category-mapping-presets';
 import { useImportJobProgress } from '@/composable/use-import-job-progress';
 import { useRecalculateBalanceToggle } from '@/composable/use-recalculate-balance-toggle';
@@ -42,7 +43,6 @@ import {
   isAccountDecided,
   isCategoryDecided,
   isCurrencyDecided,
-  isDateFormatDecided,
   isTransactionTypeDecided,
 } from '@/pages/import-export/utils/field-decision';
 import { flattenCategories } from '@/pages/import-export/utils/flatten-categories';

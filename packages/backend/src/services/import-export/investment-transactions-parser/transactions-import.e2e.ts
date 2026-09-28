@@ -1041,6 +1041,7 @@ describe('Investment transactions AI import — E2E', () => {
       return {
         symbol: 'Symbol',
         date: 'Date',
+        dateFieldOrder: 'month-first',
         side: 'Action',
         quantity: 'Quantity',
         price: 'Price',
@@ -1102,6 +1103,29 @@ describe('Investment transactions AI import — E2E', () => {
       expect(holding.transactions[1]!.amount).toBe('1002.1000000000');
       expect(result.fileType).toBe('csv');
       expect(result.tokenCount).toEqual({ input: 0, output: 0 });
+    });
+
+    it('reads the date column with a custom datePattern', async () => {
+      const portfolio = await helpers.createPortfolio({
+        payload: helpers.buildPortfolioPayload({ name: 'CSV date pattern' }),
+        raw: true,
+      });
+
+      const csv = ['Symbol,Date,Action,Quantity,Price,Fees,Currency', 'BTC,21.Sep.2024,Buy,0.05,42000,0,USDT'].join(
+        '\n',
+      );
+
+      const result = await helpers.investmentImportExtract({
+        payload: {
+          source: 'csv',
+          fileBase64: encodeFile({ text: csv }),
+          defaultPortfolioId: portfolio.id,
+          columnMapping: buildMapping({ datePattern: 'd.MMM.yyyy' }),
+        },
+        raw: true,
+      });
+
+      expect(result.holdings[0]!.transactions[0]!.date).toBe('2024-09-21');
     });
 
     it('rejects when a mapped column does not exist in the CSV headers', async () => {
@@ -1284,6 +1308,7 @@ describe('Investment transactions AI import — E2E', () => {
     const COLUMN_MAPPING: InvestmentColumnMapping = {
       symbol: 'Symbol',
       date: 'Date',
+      dateFieldOrder: 'month-first',
       side: 'Action',
       quantity: 'Quantity',
       price: 'Price',

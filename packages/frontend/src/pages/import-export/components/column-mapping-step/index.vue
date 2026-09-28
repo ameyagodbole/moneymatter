@@ -80,7 +80,12 @@
 
       <!-- Forced date-format confirmation, always visible under a mapped Date row -->
       <template #expansion="{ item }">
-        <DateFormatExpansion v-if="item.id === 'date'" />
+        <DateFormatPicker
+          v-if="item.id === 'date'"
+          v-model:field-order="importStore.columnMapping.dateFieldOrder"
+          v-model:pattern="importStore.columnMapping.datePattern"
+          :values="dateColumnValues"
+        />
       </template>
     </MappingTable>
 
@@ -244,14 +249,15 @@ import SelectField from '@/components/fields/select-field.vue';
 import UiButton from '@/components/lib/ui/button/Button.vue';
 import { Callout } from '@/components/lib/ui/callout';
 import { MappingTable, type MappingTableColumn } from '@/components/lib/ui/mapping-table';
+import DateFormatPicker from '@/components/common/date-format-picker.vue';
 import { StatusIndicator } from '@/components/lib/ui/status-indicator';
 import {
   isAccountDecided,
   isCategoryDecided,
   isCurrencyDecided,
-  isDateFormatDecided,
   isTransactionTypeDecided,
 } from '@/pages/import-export/utils/field-decision';
+import { isDateFormatDecided } from '@/common/utils/suggest-date-field-order';
 import { buildCategoryMapById } from '@/pages/import-export/utils/flatten-categories';
 import { useAccountsStore } from '@/stores/accounts';
 import { useCategoriesStore } from '@/stores/categories/categories';
@@ -271,7 +277,6 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import CellColumnSelect from './cell-column-select.vue';
-import DateFormatExpansion from './date-format-expansion.vue';
 import { type MapRowStatus, deriveMapRowStatus } from './map-row-status';
 import TransactionTypeExpansion from './transaction-type-expansion.vue';
 
@@ -307,6 +312,22 @@ onMounted(async () => {
 });
 
 const m = computed(() => importStore.columnMapping);
+
+/** Non-empty cells of the mapped date column across the FULL data set (the
+ *  50-row preview can miss values that first appear in later rows). */
+const dateColumnValues = computed<string[]>(() => {
+  const column = importStore.columnMapping.date;
+  if (!column) return [];
+  const index = importStore.csvDataRowHeaders.indexOf(column);
+  if (index === -1) return [];
+
+  const values: string[] = [];
+  for (const row of importStore.csvDataRows) {
+    const value = row[index]?.trim();
+    if (value) values.push(value);
+  }
+  return values;
+});
 
 interface MethodOption {
   label: string;
