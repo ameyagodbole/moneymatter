@@ -1187,6 +1187,37 @@ describe('Investment transactions AI import — E2E', () => {
       expect(again.cashTransactions.every((t) => t.possibleDuplicateOf !== null)).toBe(true);
     });
 
+    it('commits a stock sell listed before its buy (newest-first export)', async () => {
+      const portfolio = await helpers.createPortfolio({
+        payload: helpers.buildPortfolioPayload({ name: 'CSV newest first' }),
+        raw: true,
+      });
+      const [aapl] = await helpers.seedSecurities([{ symbol: 'AAPL', name: 'Apple Inc.' }]);
+      await helpers.createHolding({ payload: { portfolioId: portfolio.id, securityId: aapl!.id } });
+
+      const csv = [
+        'Symbol,Date,Action,Quantity,Price,Fees,Currency',
+        'AAPL,2024-02-10,Sell,0.5,200,0,USD',
+        'AAPL,2024-01-10,Buy,2,180,0,USD',
+      ].join('\n');
+      const result = await helpers.investmentImportExtract({
+        payload: {
+          source: 'csv',
+          fileBase64: encodeFile({ text: csv }),
+          defaultPortfolioId: portfolio.id,
+          columnMapping: buildMapping({ defaultAssetClassHint: 'stocks' }),
+        },
+        raw: true,
+      });
+
+      const executed = await helpers.investmentImportExecute({
+        payload: { holdings: result.holdings, skipTempIds: [] },
+        raw: true,
+      });
+
+      expect(executed).toMatchObject({ createdTransactions: 2, failedTransactions: 0 });
+    });
+
     it('reads the date column with a custom datePattern', async () => {
       const portfolio = await helpers.createPortfolio({
         payload: helpers.buildPortfolioPayload({ name: 'CSV date pattern' }),

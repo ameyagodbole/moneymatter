@@ -191,8 +191,13 @@ export async function executeInvestmentImport({
     if (!security) continue;
 
     // 3. Insert child transactions one by one through the canonical service
-    // – it handles refAmount, recalculation, and cash-balance updates.
-    for (const tx of holding.transactions) {
+    // – it handles refAmount, recalculation, and cash-balance updates. They go
+    // in date order, buys first within a day: a stock sell is checked against
+    // the shares held when it is inserted, and brokers often export newest first.
+    const chronological = holding.transactions.toSorted(
+      (a, b) => a.date.localeCompare(b.date) || Number(a.side === 'sell') - Number(b.side === 'sell'),
+    );
+    for (const tx of chronological) {
       if (skipSet.has(tx.tempId)) {
         skippedPossibleDuplicates += 1;
         continue;
@@ -210,7 +215,10 @@ export async function executeInvestmentImport({
       }
 
       try {
-        // `preloadedHoldingRef` skips a portfolio + holding lookup per row.
+        // `preloadedHoldingRef` skips a portfolio + holding lookup per row. A sell
+        // is checked against its share count, which the earlier rows of this
+        // batch changed in the database, so it is refreshed first.
+        if (tx.side === INVESTMENT_TRANSACTION_CATEGORY.sell) await preloadedHoldingRef?.reload();
         await createInvestmentTransaction({
           userId,
           portfolioId: holding.portfolioId,
