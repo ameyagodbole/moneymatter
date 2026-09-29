@@ -1,0 +1,126 @@
+---
+title: Import investment transactions
+description: Bring a broker's CSV activity export into a portfolio, including trades, dividends, fees and cash movements, and learn how each row is recorded. With a worked example for M1 Finance.
+sidebar:
+  order: 4
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+You can bring a broker's or exchange's transaction history into a portfolio: buys and sells, dividends, fees, and cash movements such as deposits, platform fees and interest. This page covers **CSV Import**, where you tell MoneyMatter what each column means. The import page also offers **AI Import**, which reads a PDF, TXT or CSV and extracts buys and sells with AI.
+
+## Start an import
+
+<Steps>
+
+1. Open the portfolio you want to import into.
+2. Click **Import transactions**.
+3. Choose **CSV Import** and upload your broker's CSV file.
+4. Click **Continue to mapping**.
+
+</Steps>
+
+Everything you import goes into the portfolio you opened.
+
+## Map the columns
+
+Pick the CSV column for each field. MoneyMatter pre-fills the ones whose header it recognises, so check each choice.
+
+| Field | Required? | What it's used for |
+|---|---|---|
+| **Symbol** | Yes | The ticker. Rows without a symbol can only be imported as cash rows (see [transaction types](#map-the-transaction-types)). |
+| **Date** | Yes | The trade date. A **Date format** block opens below it; see [date formats](/import/import-from-csv/#date-format). Dates with English month names, like "Sep 21, 2026", are recognised automatically. |
+| **Side / Action** | Yes | The column that says what kind of row it is (buy, sell, dividend…). You map its values in the next step. |
+| **Quantity** | Yes | Units bought or sold. A minus sign is ignored: the type decides the direction. |
+| **Price** | Yes | Price per unit. |
+| **Fees** | No | Commission per row. Without it, fees are 0. |
+| **Currency** | No | The currency of the cash side. Without it, the **Default currency** is used. |
+| **Name** | No | The security's display name in the review step. Leave it empty if your file has no column with the security's name. |
+| **Amount** | No | The row's cash amount, with a minus sign for money going out. Required once any type is mapped to a cash target, and used for dividends that have no units. |
+| **Description** | No | Kept as the description of cash rows, such as "M1 Platform Fee". |
+
+Under **Defaults**, pick the **Default currency** and the **Default asset class** (**Stocks** or **Crypto**). The asset class helps match your symbols to securities.
+
+## Map the transaction types
+
+Under **Side value mapping**, MoneyMatter lists every value found in the side column. Map each one:
+
+| Map to | What it records |
+|---|---|
+| **Buy** | Adds the units to the holding and takes the cost from the portfolio's cash. |
+| **Sell** | Removes the units and adds the proceeds to cash. |
+| **Dividend** | Adds cash, tied to the security. |
+| **Fee** / **Tax** | Takes cash, tied to the security. The row still needs a symbol, quantity and price. |
+| **Cash deposit / withdrawal** | Money you move in or out, such as bank transfers. No symbol needed; the sign of the **Amount** decides in or out. Counts as money you added to or took out of the portfolio. |
+| **Cash income / expense** | Money the portfolio earns or pays by itself, such as platform fees, promotional credits or lending interest. No symbol needed; the sign of the **Amount** decides in or out. Moves your cash but doesn't count as money you added. |
+| **Skip these rows** | Leaves the rows out of the import. |
+
+<Aside type="caution" title="Transfer, Cancel and Other">
+The list also offers **Transfer**, **Cancel** and **Other**. They move neither shares nor cash, and rows mapped to them block the **Import** button in the review step. Use a cash target or **Skip these rows** instead. A bank transfer into your brokerage account is a **Cash deposit / withdrawal**, not a **Transfer**.
+</Aside>
+
+### How special rows are handled
+
+- **Dividends with only an amount.** If a dividend row has no units, it's read from the **Amount** column and recorded as 1 × the amount, so the cash is exact.
+- **Negative dividends** (money taken back, such as an ADR fee charged against a dividend) are recorded as a **Fee** on the same security. The review step warns about each one.
+- **Sells with negative units** are fine: the type already says it's a sale.
+- **Currency** comes from the **Currency** column, then from a ticker suffix like "SOL-USD", then from the **Default currency**.
+
+## Review and import
+
+<Steps>
+
+1. Click **Continue to review**.
+2. Check each holding and its transactions. Cash rows are listed separately under **Cash movements**.
+3. Read any **Warnings** at the top, for example rows that couldn't be read or dividends imported as fees.
+4. Click **Import**.
+
+</Steps>
+
+Rows are recorded in date order, so a sale is always checked against the units bought before it, even when your broker lists the newest activity first.
+
+### Duplicates
+
+Rows you've already imported are marked **Possible duplicate**. Click the badge to switch it to **Skipping**; otherwise the row is imported again alongside the existing one.
+
+- Trades, dividends, fees and taxes match an existing transaction of the same security and type with the same price and amount, dated within 3 days.
+- Cash rows match an existing deposit or withdrawal of the portfolio on the same day, with the same direction, amount and currency. Each existing one matches only one row, so two identical deposits on the same day in your file are both kept if only one is recorded.
+
+After importing, open the portfolio's **All activity** tab to see every trade, dividend and cash movement by date, with the cash balance after each one. Compare it with your broker's statement to find where they differ.
+
+## Stock splits
+
+Don't add anything for stock splits. Many exports, M1's included, record purchases before a split in pre-split shares and sales after it in post-split shares, with no row for the split itself. MoneyMatter looks splits up for the stocks you hold whenever prices are synced, once a day (on a self-hosted instance you can also click **Sync prices** on the portfolio page), and adjusts your share counts. Cost basis and cash don't change. Splits show up in **All activity** as, for example, "SPLIT TSLA 3:1".
+
+If a sale was refused because the split wasn't known yet, import that row again after the next price sync.
+
+## Example: M1 Finance
+
+M1's activity export (**Date, Posted Date, Symbol, Description, Transaction Type, Amount, Units, Unit Type, Unit Price, Security Id, Security Id Type**) maps like this:
+
+| Field | M1 column |
+|---|---|
+| **Symbol** | Symbol |
+| **Date** | Date (not Posted Date) |
+| **Side / Action** | Transaction Type |
+| **Quantity** | Units |
+| **Price** | Unit Price |
+| **Amount** | Amount |
+| **Description** | Description |
+| **Name** | leave empty (it's pre-filled with Description, which isn't a security name) |
+| **Fees**, **Currency** | leave empty |
+| **Default currency** / **Default asset class** | USD / **Stocks** |
+
+| M1 transaction type | Map to |
+|---|---|
+| PURCHASED | **Buy** |
+| SOLD | **Sell** |
+| DIVIDEND | **Dividend** |
+| TRANSFER | **Cash deposit / withdrawal** (it's pre-filled with **Transfer**; change it) |
+| SRVCHG | **Cash income / expense** (the M1 platform fee) |
+| CASH | **Cash income / expense** (promotional credits) |
+| OTHER | **Cash income / expense** (securities lending interest) |
+
+- **The dates** ("Sep 21, 2026") are recognised automatically, and so are M1's negative units on sales.
+- **Negative DIVIDEND rows** ("Dividend of … debited") become fees on the security.
+- **Since mid-2024**, M1 lists these charges under OTHER instead, so they're recorded as **Cash income / expense**. Your cash is right either way.

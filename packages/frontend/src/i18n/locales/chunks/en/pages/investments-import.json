@@ -91,7 +91,7 @@
       "selectColumn": "Select column…",
       "notMapped": "Not mapped",
       "pickCategory": "Pick category…",
-      "cashMovementsNote": "Cash deposits and withdrawals aren't supported yet. Pick 'Skip these rows' for those side values to leave them out of the import.",
+      "cashMovementsNote": "Rows without a stock, such as deposits, withdrawals, platform fees or interest, can be imported too: map them to 'Cash deposit / withdrawal' or 'Cash income / expense', and map the Amount column.",
       "extractButton": "Continue to review",
       "extracting": "Extracting…",
       "fields": {
