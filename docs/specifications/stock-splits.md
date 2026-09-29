@@ -38,6 +38,7 @@ This happens in:
 - **the sell check** when creating or updating a transaction
 - **the combined balance history** replay
 - **annualized returns** (time-weighted return)
+- **realized gains** (FIFO lot matching): prices are divided by the same factor, so a lot's cost doesn't change
 - **the net-worth breakdown**'s holdings snapshots
 
 - **Why here and not at write time:** splits can arrive after the trades (a backfill, or a split announced later). Converting on read means a newly fetched split corrects every holding and every chart without rewriting transactions. The history users see is also what their broker reported.

@@ -873,6 +873,49 @@ describe('Securities Daily Sync Service (via API Endpoint)', () => {
         expect.objectContaining({ date: '2024-06-10', numerator: '4', denominator: '1' }),
       ]);
     });
+    it('computes the realized gain of a partial sale after a split in post-split shares', async () => {
+      await helpers.createInvestmentTransaction({
+        payload: {
+          portfolioId: investmentPortfolio.id,
+          securityId: usSecurity.id,
+          category: INVESTMENT_TRANSACTION_CATEGORY.buy,
+          date: '2024-01-02',
+          quantity: '1',
+          price: '100',
+        },
+      });
+      mockedYahooChart.mockImplementation((symbol: string, options: { events?: string }) =>
+        Promise.resolve({
+          quotes: [],
+          events: {
+            splits:
+              options.events === 'split' && symbol === usSecurity.providerSymbol
+                ? [{ date: new Date('2024-06-10T13:30:00Z'), numerator: 4, denominator: 1, splitRatio: '4:1' }]
+                : [],
+          },
+        }),
+      );
+      expect((await helpers.triggerSecuritiesSync()).statusCode).toBe(200);
+
+      await helpers.createInvestmentTransaction({
+        payload: {
+          portfolioId: investmentPortfolio.id,
+          securityId: usSecurity.id,
+          category: INVESTMENT_TRANSACTION_CATEGORY.sell,
+          date: '2025-01-02',
+          quantity: '1',
+          price: '50',
+        },
+      });
+
+      // One post-split share cost 100 / 4 = 25.
+      const [holding] = await helpers.getHoldings({
+        portfolioId: investmentPortfolio.id,
+        payload: { securityId: usSecurity.id },
+        raw: true,
+      });
+      expect(holding!.realizedGainValue).toBeNumericEqual(25);
+    });
   });
 
   describe('Access', () => {

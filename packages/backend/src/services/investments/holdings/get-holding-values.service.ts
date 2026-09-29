@@ -1,5 +1,6 @@
 import { INVESTMENT_TRANSACTION_CATEGORY } from '@bt/shared/types/investments';
 import { INVESTMENT_DECIMAL_SCALE, Money } from '@common/types/money';
+import { toUtcDateString } from '@common/utils/date';
 import { logger } from '@js/utils';
 import Holdings from '@models/investments/holdings.model';
 import InvestmentTransaction from '@models/investments/investment-transaction.model';
@@ -10,7 +11,10 @@ import * as UsersCurrencies from '@models/users-currencies.model';
 import { calculateRefAmountFromParams } from '@services/calculate-ref-amount.service';
 import { withDeduplication } from '@services/common/with-deduplication';
 import { calculateAllGains } from '@services/investments/gains/gains-calculator.utils';
+import { loadSplitsBySecurity } from '@services/investments/splits/load-splits';
+import { splitFactorAfter } from '@services/investments/splits/share-basis';
 import * as userExchangeRateService from '@services/user-exchange-rate';
+import { Big } from 'big.js';
 import { Op, WhereOptions, fn, col } from 'sequelize';
 
 interface GetHoldingValuesParams {
@@ -108,13 +112,26 @@ const getHoldingValuesImpl = async ({ portfolioId, date, userId }: GetHoldingVal
     raw: true,
   })) as unknown as GainsTransactionRow[];
 
+  // Gains are matched in today's share basis, so pre-split buys and post-split
+  // sells count the same shares: quantity times the later splits, price divided
+  // by them. Fees are totals and don't change.
+  const splitsBySecurity = await loadSplitsBySecurity({ securityIds });
+
   // Group transactions by securityId
   const transactionsBySecurityId = transactions.reduce(
     (acc, transaction) => {
       if (!acc[transaction.securityId]) {
         acc[transaction.securityId] = [];
       }
-      acc[transaction.securityId]!.push(transaction);
+      const factor = splitFactorAfter({
+        date: toUtcDateString(transaction.date),
+        splits: splitsBySecurity.get(transaction.securityId) ?? [],
+      });
+      acc[transaction.securityId]!.push({
+        ...transaction,
+        quantity: factor.times(transaction.quantity).toString(),
+        price: new Big(transaction.price).div(factor).toString(),
+      });
       return acc;
     },
     {} as Record<string, GainsTransactionRow[]>,
