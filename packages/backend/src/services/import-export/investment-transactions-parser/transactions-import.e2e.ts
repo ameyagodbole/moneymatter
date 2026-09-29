@@ -17,6 +17,7 @@ import { SERVER_MODELS } from '@services/ai/resolution-ladder';
 import * as helpers from '@tests/helpers';
 import { GEMINI_API_URL, VALID_GEMINI_API_KEY, rejectIfWrongModel } from '@tests/mocks/gemini/mock-api';
 import { HttpResponse, http } from 'msw';
+import YahooFinance from 'yahoo-finance2';
 
 import { dataProviderFactory } from '../../../services/investments/data-providers/provider-factory';
 import { DUPLICATE_DATE_WINDOW_DAYS } from './detect-duplicates.service';
@@ -1227,6 +1228,71 @@ describe('Investment transactions AI import — E2E', () => {
       });
 
       expect(executed).toMatchObject({ createdTransactions: 2, failedTransactions: 0 });
+    });
+
+    it('commits a sale of post-split shares of a security the import creates', async () => {
+      const defaultYahoo = jest.mocked(YahooFinance).getMockImplementation()!;
+      jest.mocked(YahooFinance).mockImplementation(
+        () =>
+          ({
+            chart: jest.fn<any>().mockImplementation((_symbol: string, options: { events?: string }) =>
+              Promise.resolve({
+                quotes: [],
+                events: {
+                  splits:
+                    options.events === 'split'
+                      ? [{ date: new Date('2024-06-10T13:30:00Z'), numerator: 4, denominator: 1, splitRatio: '4:1' }]
+                      : [],
+                },
+              }),
+            ),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          }) as any,
+      );
+      const portfolio = await helpers.createPortfolio({
+        payload: helpers.buildPortfolioPayload({ name: 'CSV split' }),
+        raw: true,
+      });
+      const tx = { fees: '0', possibleDuplicateOf: null };
+
+      const executed = await helpers.investmentImportExecute({
+        payload: {
+          holdings: [
+            {
+              tempId: 'holding-1',
+              parsedSymbol: 'NVDA',
+              parsedName: 'NVIDIA',
+              resolvedSecurity: {
+                securityId: null,
+                providerSymbol: 'NVDA',
+                symbol: 'NVDA',
+                name: 'NVIDIA Corporation',
+                assetClass: ASSET_CLASS.stocks,
+                providerName: SECURITY_PROVIDER.yahoo,
+                currencyCode: 'USD',
+                exchangeName: 'NASDAQ',
+                alreadyInDb: false,
+              },
+              resolvedConfidence: 'auto',
+              portfolioId: portfolio.id,
+              currencyCode: 'USD',
+              hasExistingHolding: false,
+              transactions: [
+                { ...tx, tempId: 'tx-1', date: '2024-01-02', side: 'buy', quantity: '1', price: '400', amount: '400' },
+                { ...tx, tempId: 'tx-2', date: '2025-01-02', side: 'sell', quantity: '4', price: '130', amount: '520' },
+              ],
+            },
+          ],
+          skipTempIds: [],
+        },
+        raw: true,
+      });
+
+      expect(executed).toMatchObject({ createdTransactions: 2, failedTransactions: 0 });
+      const [holding] = await helpers.getHoldings({ portfolioId: portfolio.id, payload: {}, raw: true });
+      expect(holding!.quantity).toBeNumericEqual(0);
+      expect(holding!.costBasis).toBeNumericEqual(0);
+      jest.mocked(YahooFinance).mockImplementation(defaultYahoo);
     });
 
     it('reads the date column with a custom datePattern', async () => {

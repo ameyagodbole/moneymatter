@@ -32,6 +32,7 @@ import { directCashTransaction } from '@services/investments/portfolios/transfer
 import { addOrUpdateFromProvider } from '@services/investments/securities-manage';
 import { syncHistoricalPrices } from '@services/investments/securities-price/historical-sync.service';
 import { findSecurityByIdentity } from '@services/investments/securities/identity';
+import { syncSecuritySplits } from '@services/investments/splits/sync-security-splits.service';
 import { createInvestmentTransaction } from '@services/investments/transactions/create.service';
 import { Big } from 'big.js';
 
@@ -144,6 +145,9 @@ export async function executeInvestmentImport({
         }
         createdSecurities += 1;
         newSecurityIds.add(security.id);
+        // Sells are checked against shares held in today's share basis, so a
+        // new security's splits must be known before its trades go in.
+        await syncSecuritySplits({ securityIds: [security.id] });
       }
 
       // 2. Resolve or create Holding for (portfolio, security).

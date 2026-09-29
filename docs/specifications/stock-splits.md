@@ -59,6 +59,7 @@ A split changes neither money invested nor cash: the cost per share falls by the
 
 - at the end of each daily price sync, and each manual one (the **Sync prices** button)
 - after a new security's historical price sync
+- when a CSV import creates a security, before its trades are inserted: the sell check needs the splits, and the historical price sync only starts after the import
 
 It upserts provider rows and recalculates every holding of a security whose splits changed. A failed lookup is logged and retried on the next sync: split lookups never fail the price sync that runs them.
 
