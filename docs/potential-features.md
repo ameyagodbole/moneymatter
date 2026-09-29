@@ -36,3 +36,17 @@ Ideas that aren't scheduled yet. Each entry says what it is, why it's useful, an
 **Why:** Fits users who clean up from the transactions view rather than the payees page.
 
 **How:** After a bulk payee update on transactions, find the previous payees that now have no transactions and offer a one-click merge into X, using `POST /payees/merge`.
+
+## Investments
+
+### Record imported trades at the broker's cash amount
+
+**What:** When an investment CSV import maps the **Amount** column, record each buy and sell at a price of |Amount| ÷ units instead of the file's unit price.
+
+**Why:** Brokers round the units and the unit price they export (M1 uses 5 decimals for units and cents for the price), so units × price drifts from what was actually charged or paid. Over an M1 history of 218 trades this left the portfolio's cash $0.18 above the broker's and the cost basis 2¢ off. Cash and cost basis should match the statement to the cent.
+
+**How:**
+
+- In `csv-parser.service.ts` (`packages/backend/src/services/import-export/investment-transactions-parser/`), for buy and sell rows with a non-zero quantity and an amount, set the price to |amount| ÷ |quantity|. Amount-only dividends already use the amount.
+- The stored price then differs from the broker's in the 4th decimal or so, and fees must stay 0 for these rows or they'd be counted twice (the broker's amount already includes them). Decide whether to keep the file's unit price for display.
+- Duplicate detection compares prices, so re-importing a file imported before this change would stop flagging its trades. Compare amounts instead, or allow a small price tolerance.
