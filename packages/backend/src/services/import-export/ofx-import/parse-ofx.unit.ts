@@ -177,6 +177,15 @@ describe('parseOfx', () => {
     expect(parseOfx({ bytes }).transactions).toHaveLength(2);
   });
 
+  it('accepts a blank line before the OFX 1.x header and none after it (Chase)', () => {
+    const [header, body] = fixture({ name: 'bank-v1.ofx' })
+      .toString('latin1')
+      .split(/\r?\n\r?\n/);
+    const bytes = Buffer.from(`\n${header}\n${body}`, 'latin1');
+
+    expect(parseOfx({ bytes }).transactions).toHaveLength(2);
+  });
+
   it('keeps non-ASCII bytes when the header declares CHARSET:NONE', () => {
     const row = '<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260801<TRNAMT>-1<FITID>x<NAME>Caf\u00e9</STMTTRN>';
     const bytes = withHeader({ body: bankStatementWithRows({ rows: row }), charset: 'NONE' });

@@ -4,6 +4,16 @@ const HEADER_LIMIT_BYTES = 8 * 1024;
 const SGML_REQUIRED_FIELDS = ['OFXHEADER', 'DATA', 'VERSION', 'ENCODING', 'CHARSET', 'COMPRESSION'] as const;
 const XML_REQUIRED_FIELDS = ['OFXHEADER', 'VERSION', 'SECURITY', 'OLDFILEUID', 'NEWFILEUID'] as const;
 
+/**
+ * Where an OFX 1.x body starts: its first tag. Header lines never contain `<`, so this holds
+ * wherever the financial institution puts its blank lines. The spec puts one between header
+ * and body; Chase puts it before the header instead.
+ */
+function findSgmlBodyStart({ text }: { text: string }): number | null {
+  const bodyStart = text.indexOf('<');
+  return bodyStart < 0 ? null : bodyStart;
+}
+
 export function parseOfxHeader({ bytes }: { bytes: Buffer }): { bodyOffset: number; header: OfxHeader } {
   if (bytes.length === 0) {
     throw new OfxParseError({ code: 'empty-file', message: 'The OFX file is empty.' });
@@ -16,15 +26,15 @@ export function parseOfxHeader({ bytes }: { bytes: Buffer }): { bodyOffset: numb
   // bootstrap pass: we can find the ASCII header without decoding the body with
   // a charset that the header has not told us yet.
   const prefix = bytes.subarray(bomLength, Math.min(bytes.length, HEADER_LIMIT_BYTES)).toString('latin1');
-  const separator = /\r?\n\r?\n/.exec(prefix);
+  const sgmlBodyStart = findSgmlBodyStart({ text: prefix });
   const processingInstructionStart = prefix.search(/<\?OFX\s/i);
   const processingInstructionEnd =
     processingInstructionStart >= 0 ? prefix.indexOf('?>', processingInstructionStart) : -1;
   const values = new Map<string, string>();
   let bodyOffset = bomLength;
-  // Detect the XML processing instruction before the SGML blank-line separator.
-  // OFX2 permits blank lines around its declarations, which must not make it
-  // enter the OFX1 header branch.
+  // Detect the XML processing instruction before looking for an SGML body. Both
+  // start with `<`, so checking OFX2 first keeps its declarations out of the
+  // OFX1 header branch.
   const isXmlHeader = processingInstructionStart >= 0;
   if (isXmlHeader) {
     if (processingInstructionEnd < 0) {
@@ -35,13 +45,13 @@ export function parseOfxHeader({ bytes }: { bytes: Buffer }): { bodyOffset: numb
     for (const match of instruction.matchAll(attributePattern)) {
       values.set(match[1]!.toUpperCase(), match[3]!.trim());
     }
-  } else if (separator) {
-    for (const line of prefix.slice(0, separator.index).split(/\r?\n/)) {
+  } else if (sgmlBodyStart !== null) {
+    for (const line of prefix.slice(0, sgmlBodyStart).split(/\r?\n/)) {
       const colon = line.indexOf(':');
       if (colon < 1) continue;
       values.set(line.slice(0, colon).trim().toUpperCase(), line.slice(colon + 1).trim());
     }
-    bodyOffset = bomLength + separator.index + separator[0].length;
+    bodyOffset = bomLength + sgmlBodyStart;
   } else {
     throw new OfxParseError({ code: 'invalid-header', message: 'The OFX header is missing or too large.' });
   }
