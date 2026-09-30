@@ -744,6 +744,11 @@ export interface BulkTransferScanBody {
   limit?: number;
   offset?: number;
   includeOutOfWallet?: boolean;
+  accountIds?: RecordId[];
+  /** Percent, 0–50. Defaults to 10. */
+  amountTolerancePercent?: number;
+  /** Whole days, 1–60. Defaults to 14. */
+  dateToleranceDays?: number;
 }
 
 export interface BulkTransferScanMatch {

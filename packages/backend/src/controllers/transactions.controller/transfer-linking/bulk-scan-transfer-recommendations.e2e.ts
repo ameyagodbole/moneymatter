@@ -1,4 +1,4 @@
-import { TRANSACTION_TRANSFER_NATURE, TRANSACTION_TYPES } from '@bt/shared/types';
+import { RecordId, TRANSACTION_TRANSFER_NATURE, TRANSACTION_TYPES } from '@bt/shared/types';
 import { generateRandomRecordId } from '@common/lib/record-id-helpers';
 import { describe, expect, it } from '@jest/globals';
 import { ERROR_CODES } from '@js/errors';
@@ -428,6 +428,170 @@ describe('bulkScanTransferRecommendations', () => {
         expect(prevTime).toBeGreaterThanOrEqual(currTime);
       }
     });
+    it('only returns pairs where at least one leg is in the requested accounts', async () => {
+      const accountA = await helpers.createAccount({ raw: true });
+      const accountB = await helpers.createAccount({ raw: true });
+      const accountC = await helpers.createAccount({ raw: true });
+
+      const createTx = async ({
+        accountId,
+        transactionType,
+      }: {
+        accountId: RecordId;
+        transactionType: TRANSACTION_TYPES;
+      }) => {
+        const [tx] = await helpers.createTransaction({
+          payload: helpers.buildTransactionPayload({ accountId, amount: 500, transactionType, time: todayISO }),
+          raw: true,
+        });
+        return tx;
+      };
+
+      const expenseA = await createTx({ accountId: accountA.id, transactionType: TRANSACTION_TYPES.expense });
+      const incomeB = await createTx({ accountId: accountB.id, transactionType: TRANSACTION_TYPES.income });
+      const incomeC = await createTx({ accountId: accountC.id, transactionType: TRANSACTION_TYPES.income });
+      const expenseC = await createTx({ accountId: accountC.id, transactionType: TRANSACTION_TYPES.expense });
+
+      const unfiltered = await helpers.bulkScanTransferRecommendations({
+        from: thirtyDaysAgo,
+        to: todayISO,
+        raw: true,
+      });
+      const unfilteredPair = unfiltered.items.find((item) => item.expense.id === expenseA.id);
+      expect(unfilteredPair!.matches.map((m) => m.transaction.id)).toEqual(
+        expect.arrayContaining([incomeB.id, incomeC.id]),
+      );
+
+      // Only account B selected: A→B and C→B stay (B is the income leg), A→C is dropped
+      const filtered = await helpers.bulkScanTransferRecommendations({
+        from: thirtyDaysAgo,
+        to: todayISO,
+        accountIds: [accountB.id],
+        raw: true,
+      });
+
+      expect(filtered.total).toBe(2);
+      const pairA = filtered.items.find((item) => item.expense.id === expenseA.id);
+      const pairC = filtered.items.find((item) => item.expense.id === expenseC.id);
+      expect(pairA!.matches.map((m) => m.transaction.id)).toEqual([incomeB.id]);
+      expect(pairC!.matches.map((m) => m.transaction.id)).toEqual([incomeB.id]);
+
+      // Selecting the expense side works too: account A keeps both of its candidates
+      const filteredByExpenseSide = await helpers.bulkScanTransferRecommendations({
+        from: thirtyDaysAgo,
+        to: todayISO,
+        accountIds: [accountA.id],
+        raw: true,
+      });
+
+      expect(filteredByExpenseSide.total).toBe(1);
+      expect(filteredByExpenseSide.items[0]!.expense.id).toBe(expenseA.id);
+      expect(filteredByExpenseSide.items[0]!.matches.map((m) => m.transaction.id)).toEqual(
+        expect.arrayContaining([incomeB.id, incomeC.id]),
+      );
+    });
+
+    it('applies custom amount and date tolerances', async () => {
+      const account1 = await helpers.createAccount({ raw: true });
+      const account2 = await helpers.createAccount({ raw: true });
+
+      const [expense] = await helpers.createTransaction({
+        payload: helpers.buildTransactionPayload({
+          accountId: account1.id,
+          amount: 500,
+          transactionType: TRANSACTION_TYPES.expense,
+          time: todayISO,
+        }),
+        raw: true,
+      });
+      const [exactIncome] = await helpers.createTransaction({
+        payload: helpers.buildTransactionPayload({
+          accountId: account2.id,
+          amount: 500,
+          transactionType: TRANSACTION_TYPES.income,
+          time: todayISO,
+        }),
+        raw: true,
+      });
+      // 4% off in amount, 3 days apart
+      const [nearIncome] = await helpers.createTransaction({
+        payload: helpers.buildTransactionPayload({
+          accountId: account2.id,
+          amount: 520,
+          transactionType: TRANSACTION_TYPES.income,
+          time: subDays(today, 3).toISOString(),
+        }),
+        raw: true,
+      });
+      // 30% off in amount, 20 days apart: outside the defaults
+      const [farIncome] = await helpers.createTransaction({
+        payload: helpers.buildTransactionPayload({
+          accountId: account2.id,
+          amount: 650,
+          transactionType: TRANSACTION_TYPES.income,
+          time: subDays(today, 20).toISOString(),
+        }),
+        raw: true,
+      });
+
+      const matchIdsFor = async (params: { amountTolerancePercent?: number; dateToleranceDays?: number }) => {
+        const response = await helpers.bulkScanTransferRecommendations({
+          from: thirtyDaysAgo,
+          to: todayISO,
+          ...params,
+          raw: true,
+        });
+        const pair = response.items.find((item) => item.expense.id === expense.id);
+        return pair?.matches.map((m) => m.transaction.id) ?? [];
+      };
+
+      const defaults = await matchIdsFor({});
+      expect(defaults).toEqual(expect.arrayContaining([exactIncome.id, nearIncome.id]));
+      expect(defaults).not.toContain(farIncome.id);
+
+      // Exact amount only
+      expect(await matchIdsFor({ amountTolerancePercent: 0 })).toEqual([exactIncome.id]);
+
+      // Same day only (amount tolerance still wide enough for the near income)
+      expect(await matchIdsFor({ dateToleranceDays: 1 })).toEqual([exactIncome.id]);
+
+      // Widened limits reach the far income
+      const widened = await matchIdsFor({ amountTolerancePercent: 30, dateToleranceDays: 21 });
+      expect(widened).toEqual(expect.arrayContaining([exactIncome.id, nearIncome.id, farIncome.id]));
+    });
+
+    it('returns empty results when requested accounts do not belong to the user', async () => {
+      const account1 = await helpers.createAccount({ raw: true });
+      const account2 = await helpers.createAccount({ raw: true });
+
+      await helpers.createTransaction({
+        payload: helpers.buildTransactionPayload({
+          accountId: account1.id,
+          amount: 500,
+          transactionType: TRANSACTION_TYPES.expense,
+          time: todayISO,
+        }),
+        raw: true,
+      });
+      await helpers.createTransaction({
+        payload: helpers.buildTransactionPayload({
+          accountId: account2.id,
+          amount: 500,
+          transactionType: TRANSACTION_TYPES.income,
+          time: todayISO,
+        }),
+        raw: true,
+      });
+
+      const response = await helpers.bulkScanTransferRecommendations({
+        from: thirtyDaysAgo,
+        to: todayISO,
+        accountIds: [generateRandomRecordId()],
+        raw: true,
+      });
+
+      expect(response).toEqual({ total: 0, items: [] });
+    });
   });
 
   describe('error cases', () => {
@@ -450,6 +614,29 @@ describe('bulkScanTransferRecommendations', () => {
         limit: 100,
       });
       expect(limitTooBig.statusCode).toBe(ERROR_CODES.ValidationError);
+
+      const malformedAccountId = await helpers.bulkScanTransferRecommendations({
+        from: thirtyDaysAgo,
+        to: todayISO,
+        accountIds: ['not-a-record-id'],
+      });
+      expect(malformedAccountId.statusCode).toBe(ERROR_CODES.ValidationError);
+
+      const invalidTolerances = [
+        { amountTolerancePercent: -1 },
+        { amountTolerancePercent: 51 },
+        { dateToleranceDays: 0 },
+        { dateToleranceDays: 61 },
+        { dateToleranceDays: 2.5 },
+      ];
+      for (const tolerance of invalidTolerances) {
+        const response = await helpers.bulkScanTransferRecommendations({
+          from: thirtyDaysAgo,
+          to: todayISO,
+          ...tolerance,
+        });
+        expect(response.statusCode).toBe(ERROR_CODES.ValidationError);
+      }
     });
   });
 });

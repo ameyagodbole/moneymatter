@@ -1,5 +1,12 @@
+import {
+  TRANSFER_SCAN_DEFAULT_AMOUNT_TOLERANCE_PERCENT,
+  TRANSFER_SCAN_DEFAULT_DATE_TOLERANCE_DAYS,
+  TRANSFER_SCAN_MAX_AMOUNT_TOLERANCE_PERCENT,
+  TRANSFER_SCAN_MAX_DATE_TOLERANCE_DAYS,
+  TRANSFER_SCAN_MIN_DATE_TOLERANCE_DAYS,
+} from '@bt/shared/const/transfer-suggestions';
 import { SORT_DIRECTIONS, TRANSACTION_TRANSFER_NATURE, TRANSACTION_TYPES } from '@bt/shared/types';
-import { dateRange, withDateOrder } from '@common/lib/zod/custom-types';
+import { dateRange, recordArrayIds, withDateOrder } from '@common/lib/zod/custom-types';
 import { createController } from '@controllers/helpers/controller-factory';
 import Transactions from '@models/transactions.model';
 import { getDismissalsForUser } from '@models/transfer-suggestion-dismissals.model';
@@ -8,7 +15,7 @@ import * as transactionsService from '@services/transactions';
 import { addDays, endOfDay, startOfDay, subDays } from 'date-fns';
 import { z } from 'zod';
 
-import { MS_PER_DAY, RECOMMENDATION_DAYS_RANGE, RECOMMENDATION_PERCENT_RANGE } from './constants';
+import { MS_PER_DAY } from './constants';
 
 const MAX_MATCHES_PER_EXPENSE = 4;
 const DEFAULT_LIMIT = 20;
@@ -54,6 +61,8 @@ function calculateConfidence({
   matchTime,
   expenseCurrency,
   matchCurrency,
+  amountTolerance,
+  dateToleranceDays,
 }: {
   expenseRefAmountCents: number;
   matchRefAmountCents: number;
@@ -61,15 +70,17 @@ function calculateConfidence({
   matchTime: Date;
   expenseCurrency: string;
   matchCurrency: string;
+  amountTolerance: number;
+  dateToleranceDays: number;
 }): number {
   // Amount proximity: 50% weight
-  const maxAmountDiff = expenseRefAmountCents * RECOMMENDATION_PERCENT_RANGE;
+  const maxAmountDiff = expenseRefAmountCents * amountTolerance;
   const actualAmountDiff = Math.abs(matchRefAmountCents - expenseRefAmountCents);
   const amountScore =
     maxAmountDiff > 0 ? CONFIDENCE_WEIGHT_AMOUNT * (1 - actualAmountDiff / maxAmountDiff) : CONFIDENCE_WEIGHT_AMOUNT;
 
   // Date proximity: 30% weight
-  const maxDaysDiff = RECOMMENDATION_DAYS_RANGE;
+  const maxDaysDiff = dateToleranceDays;
   const actualDaysDiff = Math.abs(expenseTime.getTime() - matchTime.getTime()) / MS_PER_DAY;
   const dateScore = CONFIDENCE_WEIGHT_DATE * (1 - Math.min(actualDaysDiff, maxDaysDiff) / maxDaysDiff);
 
@@ -86,13 +97,29 @@ const schema = z.object({
       limit: z.number().int().positive().max(MAX_LIMIT).optional().default(DEFAULT_LIMIT),
       offset: z.number().int().min(0).optional().default(0),
       includeOutOfWallet: z.boolean().optional().default(false),
+      // When set, at least one leg of a pair must belong to one of these accounts
+      accountIds: recordArrayIds().optional(),
+      amountTolerancePercent: z
+        .number()
+        .min(0)
+        .max(TRANSFER_SCAN_MAX_AMOUNT_TOLERANCE_PERCENT)
+        .optional()
+        .default(TRANSFER_SCAN_DEFAULT_AMOUNT_TOLERANCE_PERCENT),
+      dateToleranceDays: z
+        .number()
+        .int()
+        .min(TRANSFER_SCAN_MIN_DATE_TOLERANCE_DAYS)
+        .max(TRANSFER_SCAN_MAX_DATE_TOLERANCE_DAYS)
+        .optional()
+        .default(TRANSFER_SCAN_DEFAULT_DATE_TOLERANCE_DAYS),
     }),
   ),
 });
 
 export default createController(schema, async ({ user, body }) => {
   const { id: userId } = user;
-  const { from, to, limit, offset, includeOutOfWallet } = body;
+  const { from, to, limit, offset, includeOutOfWallet, accountIds, amountTolerancePercent, dateToleranceDays } = body;
+  const amountTolerance = amountTolerancePercent / 100;
 
   const dateFromParsed = startOfDay(new Date(from));
   const dateToParsed = endOfDay(new Date(to));
@@ -132,9 +159,9 @@ export default createController(schema, async ({ user, body }) => {
   }
 
   // 2. Fetch all income candidates in expanded date range
-  // Expand by ±14 days to catch matches for expenses near the boundaries
-  const incomeStartDate = subDays(dateFromParsed, RECOMMENDATION_DAYS_RANGE);
-  const incomeEndDate = addDays(dateToParsed, RECOMMENDATION_DAYS_RANGE);
+  // Expand by the date tolerance to catch matches for expenses near the boundaries
+  const incomeStartDate = subDays(dateFromParsed, dateToleranceDays);
+  const incomeEndDate = addDays(dateToParsed, dateToleranceDays);
 
   const incomes = (await transactionsService.getTransactions({
     userId,
@@ -158,6 +185,10 @@ export default createController(schema, async ({ user, body }) => {
   const dismissals = await getDismissalsForUser({ userId, expenseTransactionIds: eligibleExpenseIds });
   const dismissedPairsSet = new Set(dismissals.map((d) => `${d.expenseTransactionId}:${d.incomeTransactionId}`));
 
+  // The other leg can sit in any account, so both sides are fetched unfiltered and pairs are
+  // filtered during matching
+  const filterAccountIds = accountIds?.length ? new Set<string>(accountIds) : null;
+
   // 4. Match expenses to incomes in-memory
   const results: Array<{
     expense: Transactions;
@@ -166,8 +197,8 @@ export default createController(schema, async ({ user, body }) => {
 
   for (const expense of eligibleExpenses) {
     const expenseRefCents = expense.refAmount.toCents();
-    const lowerBound = Math.max(0, Math.floor(expenseRefCents * (1 - RECOMMENDATION_PERCENT_RANGE)));
-    const upperBound = Math.ceil(expenseRefCents * (1 + RECOMMENDATION_PERCENT_RANGE));
+    const lowerBound = Math.max(0, Math.floor(expenseRefCents * (1 - amountTolerance)));
+    const upperBound = Math.ceil(expenseRefCents * (1 + amountTolerance));
     const expenseTime = new Date(expense.time);
 
     const matchCandidates: Array<{ transaction: Transactions; confidence: number }> = [];
@@ -179,14 +210,19 @@ export default createController(schema, async ({ user, body }) => {
       // Different account
       if (income.accountId === expense.accountId) continue;
 
-      // Amount within ±10%
+      // At least one leg in the requested accounts
+      if (filterAccountIds && !filterAccountIds.has(expense.accountId) && !filterAccountIds.has(income.accountId)) {
+        continue;
+      }
+
+      // Amount within tolerance
       const incomeRefCents = income.refAmount.toCents();
       if (incomeRefCents < lowerBound || incomeRefCents > upperBound) continue;
 
-      // Date within ±14 days
+      // Date within tolerance
       const incomeTime = new Date(income.time);
       const daysDiff = Math.abs(expenseTime.getTime() - incomeTime.getTime()) / MS_PER_DAY;
-      if (daysDiff > RECOMMENDATION_DAYS_RANGE) continue;
+      if (daysDiff > dateToleranceDays) continue;
 
       const confidence = calculateConfidence({
         expenseRefAmountCents: expenseRefCents,
@@ -195,6 +231,8 @@ export default createController(schema, async ({ user, body }) => {
         matchTime: incomeTime,
         expenseCurrency: expense.currencyCode,
         matchCurrency: income.currencyCode,
+        amountTolerance,
+        dateToleranceDays,
       });
 
       matchCandidates.push({ transaction: income, confidence });

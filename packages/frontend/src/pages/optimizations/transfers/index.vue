@@ -12,7 +12,14 @@ import { cn } from '@/lib/utils';
 import { VUE_QUERY_GLOBAL_PREFIXES } from '@/common/const/vue-query';
 import { useWindowBreakpoints } from '@/composable/window-breakpoints';
 import { useVirtualizedInfiniteScroll } from '@/composable/virtualized-infinite-scroll';
-import type { BulkTransferScanItem } from '@bt/shared/types/endpoints';
+import {
+  TRANSFER_SCAN_DEFAULT_AMOUNT_TOLERANCE_PERCENT,
+  TRANSFER_SCAN_DEFAULT_DATE_TOLERANCE_DAYS,
+  TRANSFER_SCAN_MAX_AMOUNT_TOLERANCE_PERCENT,
+  TRANSFER_SCAN_MAX_DATE_TOLERANCE_DAYS,
+  TRANSFER_SCAN_MIN_DATE_TOLERANCE_DAYS,
+} from '@bt/shared/const/transfer-suggestions';
+import type { BulkTransferScanBody, BulkTransferScanItem } from '@bt/shared/types/endpoints';
 import type { TransactionModel, RecordId } from '@bt/shared/types';
 import { useMutation, useQueryClient } from '@tanstack/vue-query';
 import type { Period } from '@/composable/use-period-navigation';
@@ -25,6 +32,7 @@ import { createReusableTemplate } from '@vueuse/core';
 import ExpenseListItem from './components/expense-list-item.vue';
 import ScanControls from './components/scan-controls.vue';
 import SuggestionsPanel from './components/suggestions-panel.vue';
+import { normalizeTolerance } from './normalize-tolerance';
 import DialogHeader from '@/components/lib/ui/dialog/DialogHeader.vue';
 
 const { t } = useI18n();
@@ -47,6 +55,28 @@ const period = ref<Period>({
   to: endOfMonth(new Date()),
 });
 const includeOutOfWallet = ref(false);
+// Empty means every account; otherwise at least one leg of a pair must be in these accounts
+const accountIds = ref<string[]>([]);
+const amountTolerancePercent = ref<string | number | null>(TRANSFER_SCAN_DEFAULT_AMOUNT_TOLERANCE_PERCENT);
+const dateToleranceDays = ref<string | number | null>(TRANSFER_SCAN_DEFAULT_DATE_TOLERANCE_DAYS);
+
+// Clamps the tolerance inputs into the range the API accepts and writes the result back,
+// so the fields always show the values the scan actually used
+function normalizeTolerances() {
+  amountTolerancePercent.value = normalizeTolerance({
+    value: amountTolerancePercent.value,
+    min: 0,
+    max: TRANSFER_SCAN_MAX_AMOUNT_TOLERANCE_PERCENT,
+    fallback: TRANSFER_SCAN_DEFAULT_AMOUNT_TOLERANCE_PERCENT,
+  });
+  dateToleranceDays.value = normalizeTolerance({
+    value: dateToleranceDays.value,
+    min: TRANSFER_SCAN_MIN_DATE_TOLERANCE_DAYS,
+    max: TRANSFER_SCAN_MAX_DATE_TOLERANCE_DAYS,
+    fallback: TRANSFER_SCAN_DEFAULT_DATE_TOLERANCE_DAYS,
+    integer: true,
+  });
+}
 
 // Accumulated scan results across pages
 const allItems = ref<BulkTransferScanItem[]>([]);
@@ -102,14 +132,12 @@ const { virtualRows, totalSize } = useVirtualizedInfiniteScroll<BulkTransferScan
 });
 
 async function loadNextPage() {
-  if (isFetchingPage.value) return;
+  if (isFetchingPage.value || !lastScanParams.value) return;
   isFetchingPage.value = true;
 
   try {
     const data = await bulkScanTransferRecommendations({
-      from: period.value.from.toISOString(),
-      to: period.value.to.toISOString(),
-      includeOutOfWallet: includeOutOfWallet.value,
+      ...lastScanParams.value,
       offset: currentOffset.value,
       limit: PAGE_SIZE,
     });
@@ -127,15 +155,30 @@ async function loadNextPage() {
 // Fresh scan (resets pagination)
 const isScanning = ref(false);
 
+// Parameters of the last explicit scan. Paging and background re-scans reuse them, so
+// editing the controls has no effect until the user presses Scan again
+const lastScanParams = ref<Omit<BulkTransferScanBody, 'offset' | 'limit'> | null>(null);
+
+function startScan() {
+  normalizeTolerances();
+  lastScanParams.value = {
+    from: period.value.from.toISOString(),
+    to: period.value.to.toISOString(),
+    includeOutOfWallet: includeOutOfWallet.value,
+    accountIds: accountIds.value as RecordId[],
+    amountTolerancePercent: Number(amountTolerancePercent.value),
+    dateToleranceDays: Number(dateToleranceDays.value),
+  };
+  freshScan();
+}
+
 async function freshScan() {
-  if (isScanning.value) return;
+  if (isScanning.value || !lastScanParams.value) return;
   isScanning.value = true;
 
   try {
     const data = await bulkScanTransferRecommendations({
-      from: period.value.from.toISOString(),
-      to: period.value.to.toISOString(),
-      includeOutOfWallet: includeOutOfWallet.value,
+      ...lastScanParams.value,
       offset: 0,
       limit: PAGE_SIZE,
     });
@@ -288,9 +331,12 @@ function handleTransactionClick(tx: TransactionModel, oppositeTx: TransactionMod
     <ScanControls
       v-model:period="period"
       v-model:include-out-of-wallet="includeOutOfWallet"
+      v-model:account-ids="accountIds"
+      v-model:amount-tolerance-percent="amountTolerancePercent"
+      v-model:date-tolerance-days="dateToleranceDays"
       :is-loading="isScanning"
       class="shrink-0"
-      @scan="freshScan()"
+      @scan="startScan()"
     />
 
     <!-- Count header -->

@@ -29,6 +29,9 @@ interface BulkScanTransferRecommendationsParams {
   limit?: number;
   offset?: number;
   includeOutOfWallet?: boolean;
+  accountIds?: string[];
+  amountTolerancePercent?: number;
+  dateToleranceDays?: number;
 }
 
 export function dismissTransferSuggestion<R extends boolean | undefined = undefined>({

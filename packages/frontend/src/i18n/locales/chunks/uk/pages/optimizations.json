@@ -117,6 +117,13 @@
         "previousYear": "Попередній рік"
       },
       "includeOutOfWallet": "Включити перекази поза гаманцем",
+      "tolerance": {
+        "amountLabel": "Сума ±",
+        "dateLabel": "Дати ±",
+        "daysUnit": "дн.",
+        "amountPlaceholder": "напр. 10",
+        "datePlaceholder": "напр. 14"
+      },
       "skip": {
         "action": "Пропустити",
         "title": "Пропустити цю пропозицію?",

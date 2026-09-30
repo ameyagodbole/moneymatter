@@ -117,6 +117,13 @@
         "previousYear": "Previous year"
       },
       "includeOutOfWallet": "Include out-of-wallet transfers",
+      "tolerance": {
+        "amountLabel": "Amount ±",
+        "dateLabel": "Dates ±",
+        "daysUnit": "days",
+        "amountPlaceholder": "e.g. 10",
+        "datePlaceholder": "e.g. 14"
+      },
       "skip": {
         "action": "Skip",
         "title": "Skip this suggestion?",
