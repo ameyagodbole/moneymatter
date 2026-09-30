@@ -30,7 +30,7 @@
     <div v-else class="space-y-3">
       <ModelSelectorCard v-for="status in featuresStatus" :key="status.feature" :feature-status="status">
         <template v-if="FEATURE_EXTRAS[status.feature]" #extras>
-          <component :is="FEATURE_EXTRAS[status.feature]" />
+          <component :is="extra" v-for="(extra, index) in FEATURE_EXTRAS[status.feature]" :key="index" />
         </template>
       </ModelSelectorCard>
     </div>
@@ -44,11 +44,12 @@ import { AI_FEATURE } from '@bt/shared/types';
 import { RotateCwIcon, TriangleAlertIcon } from '@lucide/vue';
 import type { Component } from 'vue';
 
+import CategorizationBatchSize from './features/categorization-batch-size.vue';
 import CustomInstructions from './features/custom-instructions.vue';
 import ModelSelectorCard from './shared/model-selector-card.vue';
 
-const FEATURE_EXTRAS: Partial<Record<AI_FEATURE, Component>> = {
-  [AI_FEATURE.categorization]: CustomInstructions,
+const FEATURE_EXTRAS: Partial<Record<AI_FEATURE, Component[]>> = {
+  [AI_FEATURE.categorization]: [CustomInstructions, CategorizationBatchSize],
 };
 
 const { featuresStatus, isLoadingFeatures, featuresUnknown, isRefetchingFeatures, refetchFeatures } = useAiSettings();

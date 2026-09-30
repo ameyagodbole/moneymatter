@@ -1,6 +1,7 @@
 import { SUPPORTED_LOCALES } from '@bt/shared/i18n/locales';
 import {
   AIConnectionInfo,
+  AI_CATEGORIZATION_BATCH_SIZES,
   AI_CUSTOM_INSTRUCTIONS_MAX_LENGTH,
   AI_FEATURE,
   AI_PROVIDER,
@@ -62,6 +63,7 @@ export type StoredConnection = z.infer<typeof ZodAiConnectionSchema>;
 const ZodAiSettingsSchema = z.object({
   featureConfigs: z.array(ZodAiFeatureConfigSchema).optional(),
   customInstructions: z.string().max(AI_CUSTOM_INSTRUCTIONS_MAX_LENGTH).optional(),
+  categorizationBatchSize: z.literal(AI_CATEGORIZATION_BATCH_SIZES).optional(),
   /** List order is priority: the first dialable connection answers unconfigured features. */
   connections: z.array(ZodAiConnectionSchema).max(MAX_AI_CONNECTIONS).optional(),
 });
@@ -300,6 +302,7 @@ export const ZodSettingsPatchSchema = z.object({
   ai: z
     .object({
       customInstructions: z.string().max(AI_CUSTOM_INSTRUCTIONS_MAX_LENGTH).optional(),
+      categorizationBatchSize: z.literal(AI_CATEGORIZATION_BATCH_SIZES).optional(),
     })
     .optional(),
   notifications: z

@@ -8,6 +8,14 @@ import type { CATEGORIZATION_TRIGGER } from '../enums';
 export const AI_CATEGORIZATION_MAX_TRANSACTIONS_PER_RUN = 5000;
 
 /**
+ * Transactions sent to the model per request, as offered in the AI settings. Smaller batches
+ * fit the context window of local models; the default suits hosted ones.
+ */
+export const AI_CATEGORIZATION_BATCH_SIZES = [25, 50, 100, 200, 500] as const;
+export type AiCategorizationBatchSize = (typeof AI_CATEGORIZATION_BATCH_SIZES)[number];
+export const AI_CATEGORIZATION_DEFAULT_BATCH_SIZE: AiCategorizationBatchSize = 500;
+
+/**
  * Response of POST /user/ai/categorization/trigger. `enqueued: false` means there was
  * nothing left to categorize, which is a success rather than an error.
  */

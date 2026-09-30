@@ -271,6 +271,11 @@
         "save": "Save",
         "saved": "Saved!",
         "saveFailed": "Failed to save custom instructions. Please try again."
+      },
+      "categorizationBatchSize": {
+        "title": "Batch size",
+        "description": "Transactions sent to the model in each request. Lower it if a local model returns made-up categories or skips transactions: large batches can overflow its context window.",
+        "saveFailed": "Couldn't save the batch size. Please try again."
       }
     }
   }

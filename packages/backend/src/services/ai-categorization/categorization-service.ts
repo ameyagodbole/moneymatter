@@ -1,4 +1,5 @@
 import {
+  AI_CATEGORIZATION_DEFAULT_BATCH_SIZE,
   AI_FEATURE,
   AI_PROVIDER,
   CATEGORIZATION_SKIP_REASON,
@@ -26,6 +27,7 @@ import {
   markModelNotServed,
 } from '@services/ai';
 import { sseManager } from '@services/common/sse';
+import { getCategorizationBatchSize } from '@services/user-settings/ai-categorization-batch-size';
 import { markConnectionValid } from '@services/user-settings/ai-connections';
 import { getCustomInstructions } from '@services/user-settings/ai-custom-instructions';
 import { generateText } from 'ai';
@@ -50,11 +52,6 @@ const CUSTOM_ENDPOINT_ADDRESS_BLOCKED_ERROR_MESSAGE =
 const RATE_LIMITED_ERROR_MESSAGE = 'AI provider rate limit reached. Please try again in a few minutes.';
 
 const TEMPORARY_ERROR_MESSAGE = 'AI provider temporarily unavailable. Please try again later.';
-
-// Batch size of 500 provides ~9k tokens per batch (average case, with short
-// alias ids). Well within safe limits for AI models while providing good
-// progress feedback
-const BATCH_SIZE = 500;
 
 interface CategorizeBatchResult extends CategorizationBatchResult {
   /** How the AI call failed, when it did. Anything but `unknown` repeats on the next batch. */
@@ -122,7 +119,7 @@ async function categorizeBatch({
     // A hung or trickling endpoint must abort instead of pinning a worker slot forever.
     const { abortSignal, maxRetries } = aiCallGuards({ provider: aiClient.provider });
 
-    // A batch is up to BATCH_SIZE transactions and the model answers one line per
+    // A batch is up to the run's batch size and the model answers one line per
     // transaction, which can outgrow a provider's default output cap. Anything the
     // reply omits is already reported as `failed` below and retried, so a cut-off
     // response costs a retry rather than miscategorising -- but the cap still has to
@@ -371,8 +368,8 @@ async function selectCandidateTransactions({
 }
 
 /**
- * Categorize transactions using AI, in batches of BATCH_SIZE. The first classified
- * failure stops the run and returns partial results with `stopReason` set.
+ * Categorize transactions using AI, in batches of the user's chosen size (their own
+ * connections only; the server model keeps the default). The first classified failure stops the run and returns partial results with `stopReason` set.
  */
 export async function categorizeTransactions({
   userId,
@@ -452,6 +449,9 @@ export async function categorizeTransactions({
   }
 
   let customInstructions: string | undefined;
+  const batchSize = aiClient.usingUserKey
+    ? await getCategorizationBatchSize({ userId })
+    : AI_CATEGORIZATION_DEFAULT_BATCH_SIZE;
   if (aiClient.usingUserKey) {
     try {
       customInstructions = await getCustomInstructions({ userId });
@@ -502,9 +502,9 @@ export async function categorizeTransactions({
   // per-batch stamp would split a single run into several entries.
   const categorizedAt = new Date().toISOString();
 
-  for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
-    const batch = transactions.slice(i, i + BATCH_SIZE);
-    logger.info(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(transactions.length / BATCH_SIZE)}`);
+  for (let i = 0; i < transactions.length; i += batchSize) {
+    const batch = transactions.slice(i, i + batchSize);
+    logger.info(`Processing batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(transactions.length / batchSize)}`);
 
     // Reported before the LLM call: a single batch can run for minutes on a slow
     // model, and the UI would otherwise sit on "queued" that whole time.
@@ -582,7 +582,7 @@ export async function categorizeTransactions({
     skippedCount: allResults.skipped.length,
     failedCount: allResults.failed.length,
     batchCount: totalTokenUsage.batchCount,
-    batchSize: BATCH_SIZE,
+    batchSize,
     totalInputTokens: totalTokenUsage.inputTokens,
     totalOutputTokens: totalTokenUsage.outputTokens,
     totalTokens,

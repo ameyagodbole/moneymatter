@@ -1,6 +1,11 @@
 import { api } from '@/api/_api';
 import type { SupportedLocale } from '@bt/shared/i18n/locales';
-import type { CategoryMappingPreset, TransactionOptionalField, endpointsTypes } from '@bt/shared/types';
+import type {
+  AiCategorizationBatchSize,
+  CategoryMappingPreset,
+  TransactionOptionalField,
+  endpointsTypes,
+} from '@bt/shared/types';
 
 export interface DashboardWidgetConfig {
   widgetId: string;
@@ -78,6 +83,10 @@ export type SavedPivotViewConfig = endpointsTypes.SavedPivotViewConfig;
 export type SavedPivotView = endpointsTypes.SavedPivotView;
 
 export interface UserSettingsSchema {
+  ai?: {
+    /** Transactions per model request in AI categorization runs. Defaults to 500. */
+    categorizationBatchSize?: AiCategorizationBatchSize;
+  };
   locale?: SupportedLocale;
   dashboard?: {
     widgets: DashboardWidgetConfig[];

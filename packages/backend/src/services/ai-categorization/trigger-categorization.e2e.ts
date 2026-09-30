@@ -287,6 +287,41 @@ describe('POST /user/ai/categorization/trigger', () => {
     TEST_TIMEOUT_MS,
   );
 
+  it(
+    "splits the run into batches of the user's chosen size",
+    async () => {
+      delete process.env.GEMINI_API_KEY;
+      let modelCalls = 0;
+      global.mswMockServer.use(
+        http.post(GEMINI_API_URL, () => {
+          modelCalls += 1;
+          return HttpResponse.json({
+            candidates: [
+              { content: { parts: [{ text: '# No categorizations' }], role: 'model' }, finishReason: 'STOP' },
+            ],
+            usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15 },
+          });
+        }),
+      );
+      await helpers.createAiConnection({
+        provider: AI_PROVIDER.google,
+        name: 'Gemini',
+        model: 'gemini-3.5-flash-lite',
+        apiKey: VALID_GEMINI_API_KEY,
+      });
+      await helpers.patchUserSettings({ patch: { ai: { categorizationBatchSize: 25 } }, raw: true });
+      await seedUncategorizedTransactions({ count: 26 });
+      // Creating the connection validates it with a model call of its own.
+      modelCalls = 0;
+
+      await helpers.triggerAiCategorization();
+      await waitForRunToSettle();
+
+      expect(modelCalls).toBe(2);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
   describe('with a subset of transaction ids', () => {
     it(
       'categorizes only the requested transactions',
