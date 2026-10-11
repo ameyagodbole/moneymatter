@@ -77,10 +77,14 @@ const {
       columnMapping.account.option === AccountOptionValue.existingAccount
         ? columnMapping.account.accountId
         : defaultAccountId;
+    // `aiCategorize` drops the fallback too: a row only reaches the AI when it has
+    // neither a mapped nor a default category.
     const resolvedDefaultCategoryId =
       columnMapping.category.option === CategoryOptionValue.existingCategory
         ? columnMapping.category.categoryId
-        : defaultCategoryId;
+        : columnMapping.category.option === CategoryOptionValue.aiCategorize
+          ? undefined
+          : defaultCategoryId;
 
     return executeImport({
       userId,

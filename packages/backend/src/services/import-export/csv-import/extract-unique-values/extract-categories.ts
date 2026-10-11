@@ -36,6 +36,6 @@ export function extractCategories({
     return Array.from(uniqueCategories).toSorted();
   }
 
-  // existing-category option doesn't need extraction
+  // existing-category and ai-categorize options don't need extraction
   return [];
 }

@@ -216,7 +216,8 @@
         "options": {
           "mapToExisting": "Map each CSV category to existing categories (on next step)",
           "createNew": "Create new categories from CSV values",
-          "assignToSingle": "Assign all to single existing category"
+          "assignToSingle": "Assign all to single existing category",
+          "aiCategorize": "Categorize automatically with AI"
         }
       },
       "tagMappingTable": {
@@ -296,6 +297,7 @@
         "choosePlaceholder": "Choose…",
         "alreadyMatchedSuffix": "(already matched)",
         "amountSignNote": "Determined from the amount sign",
+        "aiCategorizeNote": "Imported into your default category, then AI picks a category from each description and payee.",
         "back": "Back",
         "next": "Next",
         "missingHint": "Still needed: {fields}",

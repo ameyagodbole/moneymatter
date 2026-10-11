@@ -8,6 +8,7 @@ import type {
 import {
   AccountOptionValue,
   CATEGORIZATION_MODE,
+  CATEGORIZATION_SOURCE,
   CategoryOptionValue,
   CurrencyOptionValue,
   ImportSource,
@@ -15,12 +16,13 @@ import {
   TransactionTypeOptionValue,
 } from '@bt/shared/types';
 import { generateRandomRecordId } from '@common/lib/record-id-helpers';
-import { describe, expect, it } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
 import { ERROR_CODES } from '@js/errors';
 import Transactions from '@models/transactions.model';
 import * as helpers from '@tests/helpers';
 import { expectCsvImportCompleted, waitForCsvImportCompletion } from '@tests/helpers/import-export';
 import { asUser, signUpSecondUser } from '@tests/helpers/share';
+import { VALID_GEMINI_API_KEY, createGeminiMock } from '@tests/mocks/gemini/mock-api';
 
 describe('Execute Import endpoint (async)', () => {
   // ---------------------------------------------------------------------------
@@ -486,6 +488,60 @@ describe('Execute Import endpoint (async)', () => {
       expect(created).toHaveLength(3);
       expect(created.every((tx) => tx.categoryId === categoryId)).toBe(true);
     });
+  });
+
+  describe('AI categorization option', () => {
+    let originalGeminiApiKey: string | undefined;
+
+    beforeEach(() => {
+      originalGeminiApiKey = process.env.GEMINI_API_KEY;
+    });
+
+    afterEach(() => {
+      if (originalGeminiApiKey === undefined) {
+        delete process.env.GEMINI_API_KEY;
+      } else {
+        process.env.GEMINI_API_KEY = originalGeminiApiKey;
+      }
+    });
+
+    it('queues every imported row for AI categorization, ignoring a stray defaultCategoryId', async () => {
+      process.env.GEMINI_API_KEY = VALID_GEMINI_API_KEY;
+      global.mswMockServer.use(createGeminiMock({ categorizations: { 1: 1, 2: 1 } }));
+
+      const account = await helpers.createAccount({ raw: true });
+      const existingCategories = await helpers.getCategoriesList();
+
+      const fileContent = buildCsv([
+        { date: '2024-01-15', amount: '100.50', description: 'Grocery shopping', type: 'expense' },
+        { date: '2024-01-16', amount: '50.00', description: 'Coffee shop', type: 'expense' },
+      ]);
+
+      const { progress } = await runImport({
+        fileContent,
+        columnMapping: buildColumnMapping({
+          account: { option: AccountOptionValue.existingAccount, accountId: account.id },
+          currency: { option: CurrencyOptionValue.existingCurrency, currencyCode: account.currencyCode },
+          category: { option: CategoryOptionValue.aiCategorize },
+        }),
+        accountMapping: {},
+        // The option must win over the legacy fallback, or the rows would never reach the AI.
+        defaultCategoryId: existingCategories[0]!.id,
+      });
+      expectCsvImportCompleted(progress);
+      expect(progress.summary.imported).toBe(2);
+
+      await helpers.waitForCategorizationStatus({
+        predicate: (status) => status.status === 'idle',
+        timeoutMs: 15_000,
+      });
+
+      const transactions = await helpers.getTransactionsByIds({ ids: progress.summary.newTransactionIds, raw: true });
+      expect(transactions).toHaveLength(2);
+      for (const transaction of transactions) {
+        expect(transaction.categorizationMeta?.source).toBe(CATEGORIZATION_SOURCE.ai);
+      }
+    }, 60_000);
   });
 
   describe('mixed account and category mappings', () => {

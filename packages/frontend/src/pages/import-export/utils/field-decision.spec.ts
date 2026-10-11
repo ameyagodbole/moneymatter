@@ -33,6 +33,10 @@ describe('isCategoryDecided', () => {
     ).toBe(false);
   });
 
+  it('returns true for aiCategorize, which needs no further decision', () => {
+    expect(isCategoryDecided({ category: { option: CategoryOptionValue.aiCategorize } })).toBe(true);
+  });
+
   it('returns true for mapDataSourceColumn with a columnName', () => {
     expect(
       isCategoryDecided({

@@ -117,6 +117,7 @@ export enum CategoryOptionValue {
   mapDataSourceColumn = 'map-data-source-column',
   createNewCategories = 'create-new-categories',
   existingCategory = 'existing-category',
+  aiCategorize = 'ai-categorize',
 }
 
 export enum TagOptionValue {
@@ -144,7 +145,8 @@ export enum AccountOptionValue {
 export type CategoryOption =
   | { option: CategoryOptionValue.mapDataSourceColumn; columnName: string }
   | { option: CategoryOptionValue.createNewCategories; columnName: string }
-  | { option: CategoryOptionValue.existingCategory; categoryId: string };
+  | { option: CategoryOptionValue.existingCategory; categoryId: string }
+  | { option: CategoryOptionValue.aiCategorize };
 
 /**
  * Tag assignment options for CSV import. Currently supports mapping a CSV

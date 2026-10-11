@@ -13,6 +13,7 @@ const categoryOptionSchema = z.discriminatedUnion('option', [
   z.object({ option: z.literal(CategoryOptionValue.mapDataSourceColumn), columnName: z.string() }),
   z.object({ option: z.literal(CategoryOptionValue.createNewCategories), columnName: z.string() }),
   z.object({ option: z.literal(CategoryOptionValue.existingCategory), categoryId: recordId() }),
+  z.object({ option: z.literal(CategoryOptionValue.aiCategorize) }),
 ]);
 
 const tagOptionSchema = z.object({

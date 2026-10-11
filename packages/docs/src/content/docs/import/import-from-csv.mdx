@@ -116,7 +116,7 @@ The second table decides how each transaction gets its category, account, curren
 
 | Field | Options |
 |---|---|
-| **Category** | **Map each CSV category to existing categories (on next step)**: pick a column, then choose a category for each value on the **Categories** step.<br/>**Create new categories from CSV values**: pick a column. You can still review each value on the **Categories** step.<br/>**Assign all to single existing category**: every transaction gets the category you pick. If you also map a **Payee** column, a payee's [default category](/transactions/payees/#default-category) can replace it. |
+| **Category** | **Map each CSV category to existing categories (on next step)**: pick a column, then choose a category for each value on the **Categories** step.<br/>**Create new categories from CSV values**: pick a column. You can still review each value on the **Categories** step.<br/>**Assign all to single existing category**: every transaction gets the category you pick. If you also map a **Payee** column, a payee's [default category](/transactions/payees/#default-category) can replace it.<br/>**Categorize automatically with AI**: no column needed. Transactions go into your default category (usually **Other**), then AI picks a category for each one from its description and payee. It uses the same AI as **AI match**. Without it, they stay in the default category. |
 | **Account** | **Map each CSV account to existing accounts (on next step)**: pick the column that names the account. You decide what happens to each account on the **Accounts** step.<br/>**Assign all to single existing account**: every transaction goes into the account you pick. |
 | **Currency** | **Map from CSV column**: pick the column with a three-letter currency code such as EUR.<br/>**Use same currency for all transactions**: pick one currency. |
 | **Transaction type** | **From Amount Sign (negative = expense, positive = income)**: the sign of the amount decides.<br/>**From Column (specify values)**: use a column that says whether each row is money in or out. It's picked for you when MoneyMatter finds a column that looks like one, such as "Type". |
@@ -244,7 +244,7 @@ Every imported transaction gets:
 - The date, the amount, and whether it's income or an expense.
 - The **Description** column as its note.
 - The account you chose, and the category from your file or the one you picked. With a single category, a mapped payee's default category can take its place.
-- Your default category (usually **Other**) when the row has no category. MoneyMatter then tries to categorize these rows automatically with AI.
+- Your default category (usually **Other**) when the row has no category, or when you chose **Categorize automatically with AI**. MoneyMatter then tries to categorize these rows automatically with AI.
 - The payee, if you mapped a **Payee** column. If that payee has [auto-apply tags](/transactions/payees/#auto-apply-tags), they're added too.
 
 ## How currencies work

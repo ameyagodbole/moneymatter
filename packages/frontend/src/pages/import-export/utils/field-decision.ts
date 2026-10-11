@@ -23,6 +23,7 @@ import {
 
 export function isCategoryDecided({ category }: { category: CategoryOption | null }): boolean {
   if (!category) return false;
+  if (category.option === CategoryOptionValue.aiCategorize) return true;
   return category.option === CategoryOptionValue.existingCategory ? !!category.categoryId : !!category.columnName;
 }
 

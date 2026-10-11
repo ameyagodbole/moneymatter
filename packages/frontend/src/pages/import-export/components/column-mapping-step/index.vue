@@ -141,6 +141,11 @@
           @update:model-value="handleCategorySelect"
         />
 
+        <!-- Category: AI ⇒ inline note (no decision) -->
+        <span v-else-if="item.id === 'category' && categoryUsesAi" class="text-muted-foreground text-xs">
+          {{ $t('pages.importExport.mapColumns.aiCategorizeNote') }}
+        </span>
+
         <!-- Account: from column ⇒ CSV column picker -->
         <CellColumnSelect
           v-else-if="item.id === 'account' && accountUsesColumn"
@@ -522,6 +527,10 @@ const categoryMethodOptions = computed<MethodOption[]>(() => [
     label: t('pages.importExport.categoryAssignment.options.assignToSingle'),
     value: CategoryOptionValue.existingCategory,
   },
+  {
+    label: t('pages.importExport.categoryAssignment.options.aiCategorize'),
+    value: CategoryOptionValue.aiCategorize,
+  },
 ]);
 
 const categoryMethodOption = computed<MethodOption | null>(() =>
@@ -534,6 +543,7 @@ const categoryUsesColumn = computed(
     m.value.category?.option === CategoryOptionValue.createNewCategories,
 );
 const categoryUsesExisting = computed(() => m.value.category?.option === CategoryOptionValue.existingCategory);
+const categoryUsesAi = computed(() => m.value.category?.option === CategoryOptionValue.aiCategorize);
 
 const handleCategoryMethodChange = (option: MethodOption | null) => {
   if (!option) {
@@ -544,6 +554,7 @@ const handleCategoryMethodChange = (option: MethodOption | null) => {
     [CategoryOptionValue.mapDataSourceColumn]: { option: CategoryOptionValue.mapDataSourceColumn, columnName: '' },
     [CategoryOptionValue.createNewCategories]: { option: CategoryOptionValue.createNewCategories, columnName: '' },
     [CategoryOptionValue.existingCategory]: { option: CategoryOptionValue.existingCategory, categoryId: '' },
+    [CategoryOptionValue.aiCategorize]: { option: CategoryOptionValue.aiCategorize },
   };
   importStore.columnMapping.category = next[option.value] ?? null;
 };
