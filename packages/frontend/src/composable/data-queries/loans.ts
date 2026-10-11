@@ -8,6 +8,7 @@ import {
   updateLoan,
 } from '@/api/loans';
 import { VUE_QUERY_CACHE_KEYS, VUE_QUERY_GLOBAL_PREFIXES } from '@/common/const';
+import { useCurrenciesStore } from '@/stores/currencies';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { type MaybeRef, computed, unref } from 'vue';
 
@@ -38,9 +39,12 @@ export const useCreateLoan = () => {
 
   return useMutation({
     mutationFn: createLoan,
-    onSuccess: () => {
+    onSuccess: (_loan, { currencyCode }) => {
       queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.loansList });
       invalidateAccountsCache(queryClient);
+      // The server links a loan currency the user didn't have yet; pick it up so the loan formats correctly.
+      const currenciesStore = useCurrenciesStore();
+      if (!currenciesStore.currenciesMap[currencyCode]) currenciesStore.loadCurrencies({ force: true });
     },
   });
 };

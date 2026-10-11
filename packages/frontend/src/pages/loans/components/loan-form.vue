@@ -8,6 +8,7 @@ import UiButton from '@/components/lib/ui/button/Button.vue';
 import { DesktopOnlyTooltip } from '@/components/lib/ui/tooltip';
 import { useCurrencyName, useFormatCurrency } from '@/composable';
 import { useFormValidation } from '@/composable/form-validator';
+import { useLinkedCurrencyGroup } from '@/composable/use-linked-currency-group';
 import { useCurrenciesStore } from '@/stores';
 import { type CurrencyModel, LOAN_TYPE, SUPPORTED_LOAN_TYPES } from '@bt/shared/types';
 import { between, helpers, integer, maxLength, required } from '@vuelidate/validators';
@@ -47,6 +48,7 @@ const { t } = useI18n();
 const currenciesStore = useCurrenciesStore();
 const { formatCurrencyLabel } = useCurrencyName();
 const { formatAmountByCurrencyCode } = useFormatCurrency();
+const linkedCurrencyGroup = useLinkedCurrencyGroup();
 const { baseCurrency, systemCurrenciesVerbose } = storeToRefs(currenciesStore);
 
 const defaultCurrency = computed(
@@ -124,9 +126,13 @@ const loanTypeOptions = computed(() =>
 
 const selectedLoanType = computed(() => loanTypeOptions.value.find((o) => o.value === form.loanType) ?? null);
 
-const selectedCurrency = computed(
-  () => systemCurrenciesVerbose.value.linked.find((item) => item.code === form.currencyCode) ?? null,
-);
+// Any currency is allowed – the server adds a new loan currency to the user's list on create.
+const currencyOptions = computed<CurrencyModel[]>(() => [
+  ...systemCurrenciesVerbose.value.linked,
+  ...systemCurrenciesVerbose.value.unlinked,
+]);
+
+const selectedCurrency = computed(() => currencyOptions.value.find((item) => item.code === form.currencyCode) ?? null);
 
 const currencyLabel = (item: CurrencyModel): string =>
   formatCurrencyLabel({ code: item.code, fallbackName: item.currency });
@@ -319,9 +325,11 @@ const submit = () => {
     <SelectField
       v-if="!isEdit"
       :model-value="selectedCurrency"
-      :values="systemCurrenciesVerbose.linked"
+      :values="currencyOptions"
+      :pinned-group="linkedCurrencyGroup"
       :label-key="currencyLabel"
       value-key="code"
+      with-search
       :label="$t('forms.loan.currencyLabel')"
       :placeholder="$t('forms.loan.currencyPlaceholder')"
       @update:model-value="(v) => v && (form.currencyCode = v.code)"

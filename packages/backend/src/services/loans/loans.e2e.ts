@@ -410,6 +410,26 @@ describe('Loans read API', () => {
       expect(row.projection.estimatedInterestPaid).toBeLessThan(1_000);
     });
 
+    it('creates a loan in a currency the user has not added yet and links that currency', async () => {
+      const currencyCode = 'EUR';
+      const before = await helpers.getUserCurrencies();
+      expect(before.some((item) => item.currencyCode === currencyCode)).toBe(false);
+
+      const loan = await helpers.createLoan({
+        payload: helpers.buildCreateLoanPayload({ currencyCode, initialBalance: 10_000, originalPrincipal: 10_000 }),
+        raw: true,
+      });
+
+      expect(loan.currencyCode).toBe(currencyCode);
+      expect(loan.currentBalance).toBe(-10_000);
+      // Ref figures are converted to the base currency, not copied from the loan-currency amount.
+      expect(loan.refCurrentBalance).toBeLessThan(0);
+      expect(loan.refCurrentBalance).not.toBe(loan.currentBalance);
+
+      const after = await helpers.getUserCurrencies();
+      expect(after.some((item) => item.currencyCode === currencyCode)).toBe(true);
+    });
+
     it('does not mark a loan paid off when outstanding is below principal and the start date is years in the past', async () => {
       // startDate is informational only: the balance anchor is always today, and
       // paid-off is derived solely from the outstanding balance, not elapsed term.
