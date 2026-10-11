@@ -161,6 +161,7 @@
         "expenseValuesPlaceholder": "напр., Debit, Withdrawal, Expense",
         "methodOptions": {
           "amountSign": "За знаком суми (від'ємна = витрата, додатня = дохід)",
+          "amountSignInverted": "За знаком суми, навпаки (додатня = витрата, від'ємна = дохід)",
           "dataSourceColumn": "Зі стовпця (вкажіть значення)"
         },
         "amountSignInfo": "ℹ️ Типи транзакцій визначатимуться автоматично: від'ємні суми = витрати, додатні суми = доходи"

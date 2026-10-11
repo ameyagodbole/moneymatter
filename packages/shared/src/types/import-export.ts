@@ -132,6 +132,8 @@ export enum CurrencyOptionValue {
 export enum TransactionTypeOptionValue {
   dataSourceColumn = 'data-source-column',
   amountSign = 'amount-sign',
+  /** Reversed sign convention, e.g. a credit card export where spending is positive. */
+  amountSignInverted = 'amount-sign-inverted',
 }
 
 export enum AccountOptionValue {
@@ -172,7 +174,8 @@ export type TransactionTypeOption =
       incomeValues: string[];
       expenseValues: string[];
     }
-  | { option: TransactionTypeOptionValue.amountSign };
+  | { option: TransactionTypeOptionValue.amountSign }
+  | { option: TransactionTypeOptionValue.amountSignInverted };
 
 /**
  * Account assignment options for CSV import

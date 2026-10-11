@@ -161,6 +161,7 @@
         "expenseValuesPlaceholder": "e.g., Debit, Withdrawal, Expense",
         "methodOptions": {
           "amountSign": "From Amount Sign (negative = expense, positive = income)",
+          "amountSignInverted": "From Amount Sign, reversed (positive = expense, negative = income)",
           "dataSourceColumn": "From Column (specify values)"
         },
         "amountSignInfo": "ℹ️ Transaction types will be determined automatically: negative amounts = expenses, positive amounts = income"

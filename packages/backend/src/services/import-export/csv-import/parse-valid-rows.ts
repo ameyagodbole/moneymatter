@@ -165,6 +165,9 @@ export async function parseValidRows({
     let transactionType: 'income' | 'expense' = 'expense';
     if (columnMapping.transactionType.option === TransactionTypeOptionValue.amountSign) {
       transactionType = parsedAmount !== null && parsedAmount >= 0 ? 'income' : 'expense';
+    } else if (columnMapping.transactionType.option === TransactionTypeOptionValue.amountSignInverted) {
+      // Mirror of amountSign: the sign is flipped, so zero still counts as income.
+      transactionType = parsedAmount !== null && parsedAmount <= 0 ? 'income' : 'expense';
     } else if (transactionTypeIndex !== -1) {
       const typeValue = row[transactionTypeIndex]?.trim() || '';
       const typeOption = columnMapping.transactionType;

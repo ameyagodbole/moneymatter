@@ -258,6 +258,37 @@ describe('Execute Import endpoint (async)', () => {
       expect(monthFirstTxs.map((tx) => txDay(tx.time)).sort()).toEqual(['2026-02-03', '2026-05-06']);
     });
 
+    it('reads positive amounts as expenses with the reversed amount sign', async () => {
+      const account = await helpers.createAccount({ raw: true });
+
+      const fileContent = buildCsv([
+        { date: '2024-01-15', amount: '100.50', description: 'Card purchase' },
+        { date: '2024-01-16', amount: '-2500.00', description: 'Card payment' },
+        { date: '2024-01-17', amount: '0', description: 'Zero adjustment' },
+      ]);
+
+      const { progress } = await runImport({
+        fileContent,
+        columnMapping: buildColumnMapping({
+          account: { option: AccountOptionValue.existingAccount, accountId: account.id },
+          currency: { option: CurrencyOptionValue.existingCurrency, currencyCode: account.currencyCode },
+          transactionType: { option: TransactionTypeOptionValue.amountSignInverted },
+        }),
+        accountMapping: {},
+      });
+      expectCsvImportCompleted(progress);
+      expect(progress.summary.imported).toBe(3);
+
+      const transactions = await helpers.getTransactionsByIds({ ids: progress.summary.newTransactionIds, raw: true });
+      const typeByNote = Object.fromEntries(transactions.map((tx) => [tx.note, tx.transactionType]));
+      // Zero mirrors the regular sign option: the flipped amount is non-negative, so income.
+      expect(typeByNote).toEqual({
+        'Card purchase': 'expense',
+        'Card payment': 'income',
+        'Zero adjustment': 'income',
+      });
+    });
+
     it('parses the date column with a custom datePattern', async () => {
       const account = await helpers.createAccount({ raw: true });
       const rows: CsvRow[] = ['21.Sep.2026', '3.Mar.2026'].map((date) => ({

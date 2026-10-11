@@ -40,6 +40,7 @@ const transactionTypeOptionSchema = z.discriminatedUnion('option', [
     expenseValues: z.array(z.string()),
   }),
   z.object({ option: z.literal(TransactionTypeOptionValue.amountSign) }),
+  z.object({ option: z.literal(TransactionTypeOptionValue.amountSignInverted) }),
 ]);
 
 const accountOptionSchema = z.discriminatedUnion('option', [

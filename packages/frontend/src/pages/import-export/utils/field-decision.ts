@@ -38,8 +38,8 @@ export function isCurrencyDecided({ currency }: { currency: CurrencyOption | nul
 }
 
 export function isTransactionTypeDecided({ transactionType }: { transactionType: TransactionTypeOption }): boolean {
-  // Amount-sign needs no further decision; from-column needs a column and both value lists.
-  return transactionType.option === TransactionTypeOptionValue.amountSign
+  // Amount-sign (either way round) needs no further decision; from-column needs a column and both value lists.
+  return transactionType.option !== TransactionTypeOptionValue.dataSourceColumn
     ? true
     : !!transactionType.columnName &&
         transactionType.incomeValues.length > 0 &&

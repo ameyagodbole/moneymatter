@@ -167,6 +167,14 @@ describe('isTransactionTypeDecided', () => {
     ).toBe(true);
   });
 
+  it('always returns true for amountSignInverted (needs no further decision)', () => {
+    expect(
+      isTransactionTypeDecided({
+        transactionType: { option: TransactionTypeOptionValue.amountSignInverted },
+      }),
+    ).toBe(true);
+  });
+
   it('returns true for dataSourceColumn when columnName and both value lists are present', () => {
     expect(
       isTransactionTypeDecided({

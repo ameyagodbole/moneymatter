@@ -700,6 +700,10 @@ const transactionTypeMethodOptions = computed<MethodOption[]>(() => [
     value: TransactionTypeOptionValue.amountSign,
   },
   {
+    label: t('pages.importExport.transactionTypeMapping.methodOptions.amountSignInverted'),
+    value: TransactionTypeOptionValue.amountSignInverted,
+  },
+  {
     label: t('pages.importExport.transactionTypeMapping.methodOptions.dataSourceColumn'),
     value: TransactionTypeOptionValue.dataSourceColumn,
   },
@@ -710,7 +714,9 @@ const transactionTypeMethodOption = computed<MethodOption | null>(() =>
 );
 
 const transactionTypeUsesAmountSign = computed(
-  () => m.value.transactionType.option === TransactionTypeOptionValue.amountSign,
+  () =>
+    m.value.transactionType.option === TransactionTypeOptionValue.amountSign ||
+    m.value.transactionType.option === TransactionTypeOptionValue.amountSignInverted,
 );
 const transactionTypeUsesColumn = computed(
   () => m.value.transactionType.option === TransactionTypeOptionValue.dataSourceColumn,
@@ -720,6 +726,8 @@ const handleTransactionTypeMethodChange = (option: MethodOption | null) => {
   if (!option) return;
   if (option.value === TransactionTypeOptionValue.amountSign) {
     importStore.columnMapping.transactionType = { option: TransactionTypeOptionValue.amountSign };
+  } else if (option.value === TransactionTypeOptionValue.amountSignInverted) {
+    importStore.columnMapping.transactionType = { option: TransactionTypeOptionValue.amountSignInverted };
   } else {
     importStore.columnMapping.transactionType = {
       option: TransactionTypeOptionValue.dataSourceColumn,

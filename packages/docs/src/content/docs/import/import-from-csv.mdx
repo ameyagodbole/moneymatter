@@ -102,7 +102,7 @@ Amounts can be written in the usual ways: 1234.56, 1,234.56 or 1.234,56. MoneyMa
 - Brackets for negative amounts: (12.00) is read as −12.00.
 - Currency symbols ($, €, £, ¥, ₴, ₽) and spaces, which are ignored.
 
-A sign after the number (12.00-) or a CR/DR marker isn't understood. The amount is read as positive, so with **From Amount Sign** those rows become income. Move the minus sign to the front in the file, or use **From Column (specify values)** if your file has a debit/credit column.
+A sign after the number (12.00-) or a CR/DR marker isn't understood. The amount is read as positive, so with **From Amount Sign** those rows become income, and with the reversed option they become expenses. Move the minus sign to the front in the file, or use **From Column (specify values)** if your file has a debit/credit column.
 
 When an amount has both a comma and a dot, the one that comes last is the decimal separator.
 
@@ -119,9 +119,9 @@ The second table decides how each transaction gets its category, account, curren
 | **Category** | **Map each CSV category to existing categories (on next step)**: pick a column, then choose a category for each value on the **Categories** step.<br/>**Create new categories from CSV values**: pick a column. You can still review each value on the **Categories** step.<br/>**Assign all to single existing category**: every transaction gets the category you pick. If you also map a **Payee** column, a payee's [default category](/transactions/payees/#default-category) can replace it.<br/>**Categorize automatically with AI**: no column needed. Transactions go into your default category (usually **Other**), then AI picks a category for each one from its description and payee. It uses the same AI as **AI match**. Without it, they stay in the default category. |
 | **Account** | **Map each CSV account to existing accounts (on next step)**: pick the column that names the account. You decide what happens to each account on the **Accounts** step.<br/>**Assign all to single existing account**: every transaction goes into the account you pick. |
 | **Currency** | **Map from CSV column**: pick the column with a three-letter currency code such as EUR.<br/>**Use same currency for all transactions**: pick one currency. |
-| **Transaction type** | **From Amount Sign (negative = expense, positive = income)**: the sign of the amount decides.<br/>**From Column (specify values)**: use a column that says whether each row is money in or out. It's picked for you when MoneyMatter finds a column that looks like one, such as "Type". |
+| **Transaction type** | **From Amount Sign (negative = expense, positive = income)**: the sign of the amount decides.<br/>**From Amount Sign, reversed (positive = expense, negative = income)**: the same, the other way round. Use it for files where spending is positive, as in many credit card exports.<br/>**From Column (specify values)**: use a column that says whether each row is money in or out. It's picked for you when MoneyMatter finds a column that looks like one, such as "Type". |
 
-With **From Amount Sign**, a negative amount is an expense, and zero or a positive amount is income.
+With **From Amount Sign**, a negative amount is an expense, and zero or a positive amount is income. With the reversed option, a positive amount is an expense, and zero or a negative amount is income.
 
 If anything is still missing, the footer says what, for example "Still needed: Date format". When everything is set, click **Next**.
 
