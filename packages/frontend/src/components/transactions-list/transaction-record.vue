@@ -169,8 +169,19 @@
             </ResponsiveTooltip>
           </div>
         </template>
+        <div
+          v-if="showAccountLine"
+          class="text-muted-foreground flex min-w-0 items-center gap-1.5 text-sm tracking-wider"
+        >
+          <AccountLogo :account="accountFrom!" class="size-4 shrink-0" />
+          <span class="max-w-[60%] shrink-0 truncate">{{ accountFrom!.name }}</span>
+          <template v-if="transaction.note">
+            <span class="shrink-0" aria-hidden="true">·</span>
+            <span class="min-w-0 truncate [word-break:break-word]">{{ transaction.note }}</span>
+          </template>
+        </div>
         <span
-          v-if="!shouldShowGroupedTransfer && !isLoadingGroupedTransfer"
+          v-else-if="!shouldShowGroupedTransfer && !isLoadingGroupedTransfer"
           :class="
             compact
               ? 'text-muted-foreground min-w-0 truncate text-sm'
@@ -271,6 +282,8 @@ const props = withDefaults(
     index?: number;
     /** Single-line row: the note renders inline, amount and date share one line. */
     compact?: boolean;
+    /** Prefix the note line with the transaction's account. Transfers already show theirs. */
+    showAccount?: boolean;
   }>(),
   {
     asButton: true,
@@ -280,6 +293,7 @@ const props = withDefaults(
     unselectableReason: null,
     index: 0,
     compact: false,
+    showAccount: false,
   },
 );
 
@@ -338,6 +352,15 @@ const externalLinkHref = computed(() =>
 );
 const locationMapUrl = computed(() => (transaction.value.location ? buildMapUrl(transaction.value.location) : null));
 const accountFrom = computed(() => accountsRecord.value[transaction.value.accountId]);
+
+const showAccountLine = computed(
+  () =>
+    props.showAccount &&
+    !props.compact &&
+    !isTransferTransaction.value &&
+    !isPortfolioLinked.value &&
+    !!accountFrom.value,
+);
 
 // Budget-scoped fetches enrich each tx with `addedBy = { id, username }` describing who
 // attached the row to the budget (recipient via metadata.addedByUserId, else the budget

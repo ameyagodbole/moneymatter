@@ -42,7 +42,7 @@ function handleRecordClick([tx, oppositeTx]: [TransactionModel, TransactionModel
     <div class="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1 @[500px]/match:grid-cols-[auto_1fr_auto]">
       <!-- Transaction: spans full row in narrow, middle column in wide -->
       <div class="col-span-2 min-w-0 @[500px]/match:col-span-1 @[500px]/match:col-start-2">
-        <TransactionRecord :tx="match.transaction" @record-click="handleRecordClick" />
+        <TransactionRecord :tx="match.transaction" show-account @record-click="handleRecordClick" />
       </div>
 
       <!-- Confidence -->

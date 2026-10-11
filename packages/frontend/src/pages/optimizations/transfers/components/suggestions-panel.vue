@@ -112,6 +112,7 @@ const previewIncomeAccount = computed(
           :key="selectedItem.expense.id"
           class="max-w-100"
           :tx="selectedItem.expense as TransactionModel"
+          show-account
           @record-click="handleTransactionRecordClick"
         />
       </div>
