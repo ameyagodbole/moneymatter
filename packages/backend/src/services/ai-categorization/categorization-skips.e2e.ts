@@ -10,6 +10,9 @@ import * as helpers from '@tests/helpers';
 import { VALID_GEMINI_API_KEY, createGeminiMock } from '@tests/mocks/gemini/mock-api';
 import { startOfDay, subDays } from 'date-fns';
 
+import { CATEGORIZATION_SCOPE } from './categorization-scope';
+import { categorizeTransactions } from './categorization-service';
+
 const RUN_SETTLE_TIMEOUT_MS = 15_000;
 const TEST_TIMEOUT_MS = 60_000;
 
@@ -107,16 +110,71 @@ describe('AI categorization skip stamping', () => {
         expect(row.categoryId).toBe(defaultCategoryId);
       }
 
-      // Stamped rows left the candidate pool, so a re-trigger has nothing to spend tokens on.
+      // Skipped rows still sit in the default category, so the candidates list keeps offering them.
       const candidates = await helpers.getAiCategorizationCandidates({ raw: true });
-      expect(candidates.totalCount).toBe(0);
-      const retrigger = await helpers.triggerAiCategorization();
-      expect(retrigger.statusCode).toBe(200);
-      expect(retrigger.body.response).toEqual({ enqueued: false, totalCount: 0 });
+      expect(candidates.totalCount).toBe(3);
 
       const history = await helpers.getAiCategorizationHistory({ raw: true });
       expect(history.totalCount).toBe(1);
       expect(history.items[0]!.transactionCount).toBe(4);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'retries rows the AI skipped when the user triggers another run',
+    async () => {
+      global.mswMockServer.use(
+        createGeminiMock({
+          skips: { 1: CATEGORIZATION_SKIP_REASON.unclear, 2: CATEGORIZATION_SKIP_REASON.no_fit },
+        }),
+      );
+
+      const user = await helpers.getUserInfo({ raw: true });
+      const defaultCategoryId = user.defaultCategoryId as RecordId;
+      const account = await helpers.createAccount({ raw: true });
+      const seededIds = await seedTransactions({ count: 2, categoryId: defaultCategoryId, accountId: account.id });
+
+      await runCategorization();
+
+      const skippedRows = await helpers.getTransactionsByIds({ ids: seededIds, raw: true });
+      expect(skippedRows.every((row) => row.categorizationMeta?.skipReason)).toBe(true);
+      const firstRunStamp = skippedRows[0]!.categorizationMeta?.categorizedAt;
+
+      global.mswMockServer.use(createGeminiMock({ categorizations: { 1: 1, 2: 1 } }));
+      await runCategorization();
+
+      const retriedRows = await helpers.getTransactionsByIds({ ids: seededIds, raw: true });
+      for (const row of retriedRows) {
+        expect(row.categorizationMeta?.source).toBe(CATEGORIZATION_SOURCE.ai);
+        expect(row.categorizationMeta?.skipReason).toBeUndefined();
+        expect(row.categorizationMeta?.categorizedAt).not.toBe(firstRunStamp);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'leaves rows the AI skipped alone on the sync and import auto-path',
+    async () => {
+      global.mswMockServer.use(createGeminiMock({ skips: { 1: CATEGORIZATION_SKIP_REASON.unclear } }));
+
+      const user = await helpers.getUserInfo({ raw: true });
+      const defaultCategoryId = user.defaultCategoryId as RecordId;
+      const account = await helpers.createAccount({ raw: true });
+      const seededIds = await seedTransactions({ count: 1, categoryId: defaultCategoryId, accountId: account.id });
+
+      await runCategorization();
+
+      global.mswMockServer.use(createGeminiMock({ categorizations: { 1: 1 } }));
+      for (const scope of [CATEGORIZATION_SCOPE.anyCategory, CATEGORIZATION_SCOPE.defaultCategoryOnly]) {
+        const result = await categorizeTransactions({ userId: user.id, transactionIds: seededIds, scope });
+        expect(result.successful).toHaveLength(0);
+        expect(result.skipped).toHaveLength(0);
+      }
+
+      const [row] = await helpers.getTransactionsByIds({ ids: seededIds, raw: true });
+      expect(row!.categorizationMeta?.skipReason).toBe(CATEGORIZATION_SKIP_REASON.unclear);
     },
     TEST_TIMEOUT_MS,
   );

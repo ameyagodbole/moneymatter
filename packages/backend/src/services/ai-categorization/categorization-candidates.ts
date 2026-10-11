@@ -17,10 +17,9 @@ import { type Includeable, Op, type WhereOptions, literal } from 'sequelize';
 import { CATEGORIZATION_SCOPE, type CategorizationScope } from './categorization-scope';
 
 export type CandidateWhere = {
-  categorizationMeta: null;
   transferNature: TRANSACTION_TRANSFER_NATURE.not_transfer;
   categoryId?: string;
-};
+} & ({ categorizationMeta: null } | { [Op.or]: WhereOptions[] });
 
 type CandidateCriteria = { where: WhereOptions; include: Includeable[] };
 
@@ -51,7 +50,10 @@ export function ownedAccountsInclude({
  * their category is the user's own entry, and an AI guess would overwrite it before the row
  * ever becomes a real transaction.
  *
- * `null` when a `defaultCategoryOnly` scope meets a user with no default category — nothing
+ * A row carries `categorizationMeta` once anything decided it, so a null meta means "never
+ * decided". `userRetry` also takes rows an AI run skipped, which kept their category.
+ *
+ * `null` when a default-category scope meets a user with no default category — nothing
  * can be a candidate then.
  */
 export async function buildCandidateWhere({
@@ -61,22 +63,27 @@ export async function buildCandidateWhere({
   userId: number;
   scope: CategorizationScope;
 }): Promise<CandidateWhere | null> {
-  const base = {
-    categorizationMeta: null,
-    transferNature: TRANSACTION_TRANSFER_NATURE.not_transfer,
-  } as const;
+  const transferNature = TRANSACTION_TRANSFER_NATURE.not_transfer;
 
-  if (scope === CATEGORIZATION_SCOPE.anyCategory) return base;
+  if (scope === CATEGORIZATION_SCOPE.anyCategory) return { transferNature, categorizationMeta: null };
 
   const defaultCategoryId = await getUserDefaultCategory({ id: userId });
   if (!defaultCategoryId) return null;
 
-  return { ...base, categoryId: defaultCategoryId };
+  if (scope === CATEGORIZATION_SCOPE.defaultCategoryOnly) {
+    return { transferNature, categoryId: defaultCategoryId, categorizationMeta: null };
+  }
+
+  return {
+    transferNature,
+    categoryId: defaultCategoryId,
+    [Op.or]: [{ categorizationMeta: null }, { 'categorizationMeta.skipReason': { [Op.not]: null } }],
+  };
 }
 
 /**
  * The user-facing side: the candidates list, its count and the manual trigger, all on the
- * `defaultCategoryOnly` scope so the rows shown can't drift from the rows a trigger processes.
+ * `userRetry` scope so the rows shown can't drift from the rows a trigger processes.
  *
  * `transactionIds` narrows this predicate instead of replacing it, so caller-supplied ids
  * can only reach rows that were already candidates. An empty list means unscoped.
@@ -88,7 +95,7 @@ async function buildCandidateCriteria({
   userId: number;
   transactionIds?: string[];
 }): Promise<CandidateCriteria | null> {
-  const where = await buildCandidateWhere({ userId, scope: CATEGORIZATION_SCOPE.defaultCategoryOnly });
+  const where = await buildCandidateWhere({ userId, scope: CATEGORIZATION_SCOPE.userRetry });
   if (!where) return null;
 
   return {

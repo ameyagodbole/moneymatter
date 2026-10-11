@@ -59,7 +59,7 @@ async function consumeTriggerBudget({ userId }: { userId: number }): Promise<voi
 
 /**
  * Re-runs AI categorization on demand over everything still sitting in the user's default
- * category, or over `transactionIds` when the caller picked a subset. Budget is only spent
+ * category (including rows an earlier run skipped), or over `transactionIds` when the caller picked a subset. Budget is only spent
  * once there is real work to do and the user is on the server's credentials — their own key
  * or endpoint costs us nothing.
  *
@@ -127,7 +127,7 @@ async function runTrigger({
   await queueCategorizationJob({
     userId,
     transactionIds: candidateIds,
-    scope: CATEGORIZATION_SCOPE.defaultCategoryOnly,
+    scope: CATEGORIZATION_SCOPE.userRetry,
     trigger: CATEGORIZATION_TRIGGER.manual,
   });
 

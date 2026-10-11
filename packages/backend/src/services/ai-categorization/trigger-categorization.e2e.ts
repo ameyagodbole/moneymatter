@@ -238,14 +238,14 @@ describe('POST /user/ai/categorization/trigger', () => {
       process.env.GEMINI_API_KEY = VALID_GEMINI_API_KEY;
       global.mswMockServer.use(geminiTextMock());
 
-      // Fresh rows per attempt: a settled run stamps its candidates (skips included),
-      // so re-triggering on the same rows would report nothing to do instead.
+      // Fresh rows per attempt. The mock answers nothing, so each run skips its rows, and
+      // skipped rows stay candidates for a manual trigger: the pool grows by 2 each time.
       for (let attempt = 0; attempt < 3; attempt++) {
         await seedUncategorizedTransactions({ count: 2 });
         const response = await helpers.triggerAiCategorization();
 
         expect(response.statusCode).toBe(200);
-        expect(response.body.response).toEqual({ enqueued: true, totalCount: 2 });
+        expect(response.body.response).toEqual({ enqueued: true, totalCount: 2 * (attempt + 1) });
 
         await waitForRunToSettle();
       }
@@ -274,12 +274,13 @@ describe('POST /user/ai/categorization/trigger', () => {
       expect(connectionResponse.statusCode).toBe(201);
 
       // One past the server-key budget of 3: enough to prove the limiter is not applied.
+      // Each run skips its rows and they stay candidates, so the pool grows by 2 each time.
       for (let attempt = 0; attempt < 4; attempt++) {
         await seedUncategorizedTransactions({ count: 2 });
         const response = await helpers.triggerAiCategorization();
 
         expect(response.statusCode).toBe(200);
-        expect(response.body.response).toEqual({ enqueued: true, totalCount: 2 });
+        expect(response.body.response).toEqual({ enqueued: true, totalCount: 2 * (attempt + 1) });
 
         await waitForRunToSettle();
       }
