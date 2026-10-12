@@ -24,6 +24,7 @@ defineProps<{
   isDuplicateSecurity: boolean;
   isValid: boolean;
   unskippedDuplicateCount: number;
+  skippedDuplicateCount: number;
   isTransactionValid: (tx: InvestmentImportTransaction) => boolean;
 }>();
 
@@ -108,11 +109,20 @@ const emit = defineEmits<{
       <!-- Txn count + dup warning -->
       <div class="flex items-center gap-2 @md/import:justify-end">
         <DesktopOnlyTooltip
-          v-if="unskippedDuplicateCount > 0"
+          v-if="skippedDuplicateCount + unskippedDuplicateCount > 0"
           :content="
-            $t('investmentsImport.review.tooltips.parentRowDuplicates', unskippedDuplicateCount, {
-              named: { count: unskippedDuplicateCount },
-            })
+            [
+              skippedDuplicateCount > 0 &&
+                $t('investmentsImport.review.tooltips.parentRowSkippedDuplicates', skippedDuplicateCount, {
+                  named: { count: skippedDuplicateCount },
+                }),
+              unskippedDuplicateCount > 0 &&
+                $t('investmentsImport.review.tooltips.parentRowDuplicates', unskippedDuplicateCount, {
+                  named: { count: unskippedDuplicateCount },
+                }),
+            ]
+              .filter(Boolean)
+              .join(' ')
           "
           :content-class-name="TOOLTIP_CLASS"
         >
@@ -120,7 +130,7 @@ const emit = defineEmits<{
             class="bg-warning/15 text-warning-text inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
           >
             <TriangleAlertIcon class="size-3.5" />
-            {{ unskippedDuplicateCount }}
+            {{ skippedDuplicateCount + unskippedDuplicateCount }}
           </span>
         </DesktopOnlyTooltip>
         <span class="text-muted-foreground text-sm whitespace-nowrap">

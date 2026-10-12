@@ -9,13 +9,20 @@ import {
   type InvestmentImportCashTransaction,
 } from '@bt/shared/types/investments';
 import { Trash2Icon, TriangleAlertIcon } from '@lucide/vue';
+import { computed } from 'vue';
 
 const TOOLTIP_CLASS = 'max-w-xs';
 
-defineProps<{
+const props = defineProps<{
   cashTransactions: InvestmentImportCashTransaction[];
   skipTempIds: Set<string>;
 }>();
+
+const skippedDuplicateCount = computed(
+  () =>
+    props.cashTransactions.filter((cashTx) => cashTx.possibleDuplicateOf && props.skipTempIds.has(cashTx.tempId))
+      .length,
+);
 
 const emit = defineEmits<{
   (e: 'toggle-skip', tempId: string): void;
@@ -27,10 +34,26 @@ const { formatAmountByCurrencyCode } = useFormatCurrency();
 
 <template>
   <Card>
-    <CardHeader>
+    <CardHeader class="flex flex-row items-center justify-between gap-2 space-y-0">
       <CardTitle class="text-base">
         {{ $t('investmentsImport.review.cash.title', { count: cashTransactions.length }) }}
       </CardTitle>
+      <DesktopOnlyTooltip
+        v-if="skippedDuplicateCount > 0"
+        :content="
+          $t('investmentsImport.review.cash.skippedDuplicates', skippedDuplicateCount, {
+            named: { count: skippedDuplicateCount },
+          })
+        "
+        :content-class-name="TOOLTIP_CLASS"
+      >
+        <span
+          class="bg-warning/15 text-warning-text inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+        >
+          <TriangleAlertIcon class="size-3.5" />
+          {{ skippedDuplicateCount }}
+        </span>
+      </DesktopOnlyTooltip>
     </CardHeader>
     <CardContent class="divide-y p-0">
       <div

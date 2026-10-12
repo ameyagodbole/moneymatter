@@ -5,6 +5,7 @@
  */
 export { extractInvestmentTransactionsWithAI } from './ai-extraction.service';
 export { buildCashTransactions } from './build-cash-transactions.service';
+export { detectInvestmentDuplicates, isDedupSide } from './detect-duplicates.service';
 export { estimateInvestmentExtractionCost } from './cost-estimation.service';
 export { parseInvestmentCsv } from './csv-parser.service';
 export { executeInvestmentImport } from './execute-import.service';

@@ -465,6 +465,77 @@ describe('Investment transactions AI import — E2E', () => {
     }, 120_000);
   });
 
+  describe('check-duplicates', () => {
+    const rows = [
+      { tempId: 'dup', date: DEDUP_BASE_DATE, side: 'buy' as const, price: DEDUP_BASE_PRICE, amount: '2100' },
+      { tempId: 'other-price', date: DEDUP_BASE_DATE, side: 'buy' as const, price: '21000', amount: '2100' },
+      { tempId: 'transfer', date: DEDUP_BASE_DATE, side: 'transfer' as const, price: DEDUP_BASE_PRICE, amount: '2100' },
+    ];
+
+    it('flags rows of a security the user picked in review, ignoring non-dedup sides', async () => {
+      const portfolio = await seedBtcDedupState();
+      const btc = await Securities.findOne({ where: { providerSymbol: 'bitcoin' } });
+      const [existing] = await InvestmentTransaction.findAll({ where: { portfolioId: portfolio.id } });
+
+      const result = await helpers.investmentImportCheckDuplicates({
+        payload: {
+          portfolioId: portfolio.id,
+          security: {
+            securityId: btc!.id,
+            assetClass: ASSET_CLASS.crypto,
+            providerName: SECURITY_PROVIDER.coingecko,
+            providerSymbol: 'bitcoin',
+            symbol: 'BTC',
+            currencyCode: 'USD',
+          },
+          transactions: rows,
+        },
+        raw: true,
+      });
+
+      expect(result.duplicates).toEqual([{ tempId: 'dup', existingTransactionId: existing!.id }]);
+    });
+
+    it('finds the existing security by identity when a search pick carries no securityId', async () => {
+      const portfolio = await seedBtcDedupState();
+      const [existing] = await InvestmentTransaction.findAll({ where: { portfolioId: portfolio.id } });
+
+      const picked = await helpers.investmentImportCheckDuplicates({
+        payload: {
+          portfolioId: portfolio.id,
+          security: {
+            securityId: null,
+            assetClass: ASSET_CLASS.crypto,
+            providerName: SECURITY_PROVIDER.coingecko,
+            providerSymbol: 'bitcoin',
+            symbol: 'BTC',
+            currencyCode: 'USD',
+          },
+          transactions: rows,
+        },
+        raw: true,
+      });
+      expect(picked.duplicates).toEqual([{ tempId: 'dup', existingTransactionId: existing!.id }]);
+
+      const notInDb = await helpers.investmentImportCheckDuplicates({
+        payload: {
+          portfolioId: portfolio.id,
+          security: {
+            securityId: null,
+            assetClass: ASSET_CLASS.crypto,
+            providerName: SECURITY_PROVIDER.coingecko,
+            providerSymbol: 'ethereum',
+            symbol: 'ETH',
+            currencyCode: 'USD',
+          },
+          transactions: rows,
+        },
+        raw: true,
+      });
+      expect(notInDb.duplicates).toEqual([]);
+    });
+  });
+
   describe('execute', () => {
     it('creates a new security, holding, and child transactions for an unresolved AI batch the user then resolved', async () => {
       const portfolio = await helpers.createPortfolio({

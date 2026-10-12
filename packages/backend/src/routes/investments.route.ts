@@ -1,4 +1,5 @@
 import {
+  checkDuplicatesController as importCheckDuplicatesController,
   estimateCostController as importEstimateCostController,
   executeImportController as importExecuteController,
   extractController as importExtractController,
@@ -290,6 +291,12 @@ router.post(
   checkBaseCurrencyLock,
   validateEndpoint(importExecuteController.schema),
   importExecuteController.handler,
+);
+router.post(
+  '/transactions-import/check-duplicates',
+  checkBaseCurrencyLock,
+  validateEndpoint(importCheckDuplicatesController.schema),
+  importCheckDuplicatesController.handler,
 );
 
 export default router;

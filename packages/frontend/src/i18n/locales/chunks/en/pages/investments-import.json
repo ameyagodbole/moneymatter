@@ -41,9 +41,10 @@
       "deleteTransaction": "Delete transaction",
       "buy": "Buy",
       "sell": "Sell",
-      "possibleDup": "Possible duplicate",
+      "possibleDup": "Importing anyway",
       "skipping": "Skipping",
-      "duplicateBadgeTooltip": "This looks like a possible duplicate of an existing transaction. Click to skip it — otherwise a new transaction will be created alongside the existing one (no merge or override).",
+      "duplicateBadgeTooltip": "This looks like a possible duplicate of an existing transaction, so it's skipped by default. Click to import it anyway — a new transaction will be created alongside the existing one (no merge or override).",
+      "duplicateRecheckFailed": "Could not re-check \"{symbol}\" for possible duplicates — review your existing transactions manually.",
       "back": "Back",
       "commit": "Import",
       "cols": {
@@ -60,10 +61,12 @@
       "tooltips": {
         "security": "We picked a security automatically based on the AI-extracted ticker. Click the field to override the match if it's wrong.",
         "currency": "Currency the cash side of the trade was settled in (e.g. USD, EUR). It does not change how the holding is stored — amounts are normalized to your base currency using historical exchange rates at the trade date.",
-        "parentRowDuplicates": "{count} possible duplicate in this holding will be imported as a new transaction unless skipped. | {count} possible duplicates in this holding will be imported as new transactions unless skipped."
+        "parentRowDuplicates": "{count} possible duplicate in this holding will be imported as a new transaction unless skipped. | {count} possible duplicates in this holding will be imported as new transactions unless skipped.",
+        "parentRowSkippedDuplicates": "{count} possible duplicate in this holding will be skipped. Expand the row to import it anyway. | {count} possible duplicates in this holding will be skipped. Expand the row to import them anyway."
       },
       "cash": {
-        "title": "Cash movements ({count})"
+        "title": "Cash movements ({count})",
+        "skippedDuplicates": "{count} possible duplicate cash movement will be skipped. Click its badge to import it anyway. | {count} possible duplicate cash movements will be skipped. Click their badges to import them anyway."
       }
     },
     "done": {

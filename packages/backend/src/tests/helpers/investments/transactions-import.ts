@@ -1,4 +1,6 @@
 import type {
+  InvestmentImportCheckDuplicatesRequest,
+  InvestmentImportCheckDuplicatesResponse,
   InvestmentImportEstimateCostRequest,
   InvestmentImportExecuteRequest,
   InvestmentImportExecuteResponse,
@@ -49,6 +51,21 @@ export function investmentImportExecute<R extends boolean | undefined = false>({
   return makeRequest<InvestmentImportExecuteResponse, R>({
     method: 'post',
     url: '/investments/transactions-import/execute',
+    payload,
+    raw,
+  });
+}
+
+export function investmentImportCheckDuplicates<R extends boolean | undefined = false>({
+  payload,
+  raw,
+}: {
+  payload: InvestmentImportCheckDuplicatesRequest;
+  raw?: R;
+}): UtilizeReturnType<() => InvestmentImportCheckDuplicatesResponse, R> {
+  return makeRequest<InvestmentImportCheckDuplicatesResponse, R>({
+    method: 'post',
+    url: '/investments/transactions-import/check-duplicates',
     payload,
     raw,
   });

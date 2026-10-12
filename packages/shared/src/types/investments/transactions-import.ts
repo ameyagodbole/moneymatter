@@ -300,7 +300,29 @@ export interface InvestmentImportExecuteRequest {
   skipTempIds: string[];
 }
 
+/**
+ * Re-run the possible-duplicate check for one holding row after the user picks
+ * a different security in review. Rows whose side isn't a dedup side are ignored.
+ */
+export interface InvestmentImportCheckDuplicatesRequest {
+  portfolioId: string;
+  /**
+   * The holding's current security. Picks from search carry `securityId: null`
+   * even when the security already exists, so the server looks it up by identity.
+   */
+  security: Pick<
+    ResolvedSecurityRef,
+    'securityId' | 'assetClass' | 'providerName' | 'providerSymbol' | 'symbol' | 'currencyCode'
+  >;
+  transactions: Array<Pick<InvestmentImportTransaction, 'tempId' | 'date' | 'side' | 'price' | 'amount'>>;
+}
+
 /* ---------- response shapes ---------- */
+
+export interface InvestmentImportCheckDuplicatesResponse {
+  /** One entry per flagged row; rows without a match are left out. */
+  duplicates: Array<{ tempId: string; existingTransactionId: string }>;
+}
 
 export interface InvestmentImportExecuteResponse {
   createdSecurities: number;

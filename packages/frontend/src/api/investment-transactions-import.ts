@@ -1,5 +1,7 @@
 import { api } from '@/api/_api';
 import type {
+  InvestmentImportCheckDuplicatesRequest,
+  InvestmentImportCheckDuplicatesResponse,
   InvestmentImportEstimateCostRequest,
   InvestmentImportExecuteRequest,
   InvestmentImportExecuteResponse,
@@ -26,4 +28,10 @@ export const executeInvestmentImport = async (
   payload: InvestmentImportExecuteRequest,
 ): Promise<InvestmentImportExecuteResponse> => {
   return api.post('/investments/transactions-import/execute', payload);
+};
+
+export const checkInvestmentImportDuplicates = async (
+  payload: InvestmentImportCheckDuplicatesRequest,
+): Promise<InvestmentImportCheckDuplicatesResponse> => {
+  return api.post('/investments/transactions-import/check-duplicates', payload);
 };

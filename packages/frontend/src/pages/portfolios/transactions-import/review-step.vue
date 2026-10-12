@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { executeInvestmentImport } from '@/api/investment-transactions-import';
+import { checkInvestmentImportDuplicates, executeInvestmentImport } from '@/api/investment-transactions-import';
 import { VUE_QUERY_CACHE_KEYS } from '@/common/const';
 import { Button } from '@/components/lib/ui/button';
 import { Callout } from '@/components/lib/ui/callout';
@@ -44,8 +44,18 @@ const holdings = ref<InvestmentImportHolding[]>(
 );
 const cashTransactions = ref<InvestmentImportCashTransaction[]>([...props.initialCashTransactions]);
 const warnings = ref<string[]>([...props.initialWarnings]);
-const skipTempIds = ref<Set<string>>(new Set());
+// Possible duplicates start out skipped; the user has to opt in to import them.
+const skipTempIds = ref<Set<string>>(
+  new Set(
+    [...holdings.value.flatMap((h) => h.transactions), ...cashTransactions.value]
+      .filter((tx) => tx.possibleDuplicateOf)
+      .map((tx) => tx.tempId),
+  ),
+);
 const expandedHoldings = ref<Set<string>>(new Set());
+// Holdings with a duplicate re-check in flight; commit waits for them so a
+// late flag can't let a duplicate through.
+const recheckingHoldings = ref<Set<string>>(new Set());
 
 const { data: allCurrencies } = useAllCurrencies();
 
@@ -111,7 +121,8 @@ const allValid = computed(
   () =>
     holdings.value.length + cashTransactions.value.length > 0 &&
     holdings.value.every(isHoldingValid) &&
-    duplicateSecurityRows.value.size === 0,
+    duplicateSecurityRows.value.size === 0 &&
+    recheckingHoldings.value.size === 0,
 );
 
 function computeAmount(tx: InvestmentImportTransaction): string {
@@ -154,11 +165,112 @@ function toggleSkipDuplicate(tempId: string) {
   skipTempIds.value = next;
 }
 
+function setRechecking(tempId: string, active: boolean) {
+  const next = new Set(recheckingHoldings.value);
+  if (active) next.add(tempId);
+  else next.delete(tempId);
+  recheckingHoldings.value = next;
+}
+
+/**
+ * Identity of the security a holding points at. Search picks always carry
+ * `securityId: null`, so the id alone can't tell one pick from another.
+ */
+function securityKey(holding: InvestmentImportHolding): string | null {
+  const security = holding.resolvedSecurity;
+  if (!security) return null;
+  return [
+    security.securityId,
+    security.assetClass,
+    security.providerName,
+    security.providerSymbol,
+    security.currencyCode,
+  ].join('|');
+}
+
+/**
+ * Re-run the duplicate check for one holding against its current security.
+ * Old flags belonged to the previous security, so they're cleared first; new
+ * flags start out skipped, same as the ones from extract.
+ */
+async function recheckDuplicates(holding: InvestmentImportHolding) {
+  const key = securityKey(holding);
+  const security = holding.resolvedSecurity;
+  const nextSkips = new Set(skipTempIds.value);
+  for (const tx of holding.transactions) {
+    tx.possibleDuplicateOf = null;
+    nextSkips.delete(tx.tempId);
+  }
+  skipTempIds.value = nextSkips;
+
+  setRechecking(holding.tempId, Boolean(security));
+  if (!security) return;
+
+  try {
+    const { duplicates } = await checkInvestmentImportDuplicates({
+      portfolioId: holding.portfolioId,
+      security: {
+        securityId: security.securityId,
+        assetClass: security.assetClass,
+        providerName: security.providerName,
+        providerSymbol: security.providerSymbol,
+        symbol: security.symbol,
+        currencyCode: security.currencyCode,
+      },
+      transactions: holding.transactions.map(({ tempId, date, side, price, amount }) => ({
+        tempId,
+        date,
+        side,
+        price,
+        amount,
+      })),
+    });
+    // The user picked yet another security while this was in flight.
+    if (securityKey(holding) !== key) return;
+
+    const byTempId = new Map(duplicates.map((d) => [d.tempId, d.existingTransactionId]));
+    const withNewSkips = new Set(skipTempIds.value);
+    for (const tx of holding.transactions) {
+      const match = byTempId.get(tx.tempId);
+      if (!match) continue;
+      tx.possibleDuplicateOf = match;
+      withNewSkips.add(tx.tempId);
+    }
+    skipTempIds.value = withNewSkips;
+  } catch {
+    warnings.value = [
+      ...warnings.value,
+      t('investmentsImport.review.duplicateRecheckFailed', { symbol: holding.parsedSymbol }),
+    ];
+  } finally {
+    if (securityKey(holding) === key) setRechecking(holding.tempId, false);
+  }
+}
+
+// Security last checked per holding; extract already checked the initial ones.
+const checkedSecurityKeys = new Map(holdings.value.map((h) => [h.tempId, securityKey(h)]));
+
+watch(
+  () => holdings.value.map(securityKey),
+  () => {
+    for (const holding of holdings.value) {
+      const key = securityKey(holding);
+      if (checkedSecurityKeys.get(holding.tempId) === key) continue;
+      checkedSecurityKeys.set(holding.tempId, key);
+      recheckDuplicates(holding);
+    }
+  },
+);
+
 function toggleHoldingExpansion(tempId: string) {
   const next = new Set(expandedHoldings.value);
   if (next.has(tempId)) next.delete(tempId);
   else next.add(tempId);
   expandedHoldings.value = next;
+}
+
+function skippedDuplicateCount(h: InvestmentImportHolding): number {
+  return h.transactions.filter((tx) => tx.possibleDuplicateOf && skipTempIds.value.has(tx.tempId)).length;
 }
 
 function unskippedDuplicateCount(h: InvestmentImportHolding): number {
@@ -277,6 +389,7 @@ const execute = useMutation({
         :is-duplicate-security="duplicateSecurityRows.has(holding.tempId)"
         :is-valid="isHoldingValid(holding)"
         :unskipped-duplicate-count="unskippedDuplicateCount(holding)"
+        :skipped-duplicate-count="skippedDuplicateCount(holding)"
         :is-transaction-valid="isTransactionValid"
         @delete="deleteHolding(holding.tempId)"
         @toggle-expansion="toggleHoldingExpansion(holding.tempId)"
