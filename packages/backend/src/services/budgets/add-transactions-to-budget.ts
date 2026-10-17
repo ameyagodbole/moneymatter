@@ -2,6 +2,7 @@ import { BUDGET_TYPES, SHARE_PERMISSIONS } from '@bt/shared/types';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
 import { t } from '@i18n/index';
 import { ValidationError } from '@js/errors';
+import BudgetExcludedTransactions from '@models/budget-excluded-transactions.model';
 import BudgetTransactions, { BudgetTransactionMetadata } from '@models/budget-transactions.model';
 import Budgets from '@models/budget.model';
 import { findTransactions } from '@models/transactions-query';
@@ -32,12 +33,7 @@ export const addTransactionsToBudget = withTransaction(async (payload: AddTransa
     message: t({ key: 'budgets.budgetNotFound' }),
   });
 
-  // Category budgets auto-track transactions by category - manual linking is not allowed
-  if (budget.type === BUDGET_TYPES.category) {
-    throw new ValidationError({ message: t({ key: 'budgets.cannotManuallyLinkToCategoryBudget' }) });
-  }
-
-  // Recipients can only attach THEIR OWN transactions to a shared manual budget. Owners
+  // Recipients can only attach THEIR OWN transactions to a shared budget. Owners
   // can attach anything they own. The transaction's category does NOT need to match the
   // budget's category list (per "Category mismatch on attach" decision — category list
   // governs auto-include, not manual attachment).
@@ -67,7 +63,12 @@ export const addTransactionsToBudget = withTransaction(async (payload: AddTransa
     metadata,
   }));
 
-  await BudgetTransactions.bulkCreate(budgetTransactions);
+  // Linking a transaction a category budget had excluded puts it back in.
+  if (budget.type === BUDGET_TYPES.category) {
+    await BudgetExcludedTransactions.destroy({ where: { budgetId, transactionId: { [Op.in]: transactionIds } } });
+  }
+
+  await BudgetTransactions.bulkCreate(budgetTransactions, { ignoreDuplicates: true });
 
   return {
     message: t({ key: 'budgets.transactionsAddedSuccessfully' }),

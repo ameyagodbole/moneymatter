@@ -131,7 +131,7 @@
     "categoryBudget": {
       "trackedCategories": "Tracked Categories",
       "categoriesCount": "{count} categories tracked",
-      "autoTrackedInfo": "Transactions are automatically tracked based on categories",
+      "autoTrackedInfo": "Transactions in these categories are tracked automatically. You can also add other transactions by hand or exclude ones that don't belong.",
       "transactionsTitle": "Transactions",
       "transactionsCount": "{count} transactions",
       "noTransactions": "No transactions yet",
@@ -145,6 +145,19 @@
       "settings": {
         "categoriesLabel": "Tracked Categories"
       }
+    },
+    "overrides": {
+      "addByHand": "Add transactions",
+      "addedByHand": "Added by hand",
+      "exclude": "Exclude from budget",
+      "unlink": "Remove from budget",
+      "restore": "Put back in budget",
+      "excludedTitle": "Excluded ({count})",
+      "excludeSuccess": "Transaction excluded from the budget",
+      "excludeError": "Couldn't exclude the transaction",
+      "restoreSuccess": "Transaction put back in the budget",
+      "restoreError": "Couldn't put the transaction back",
+      "unlinkError": "Couldn't remove the transaction from the budget"
     },
     "manualBudget": {
       "edit": "Edit",

@@ -8,9 +8,9 @@
  * manual budget, those rows now count in stats / spending-stats / the budget tx
  * list, and category breakdowns merge across users by `Categories.key`.
  *
- * Category-type budgets stay owner-only (recipients can't manually attach), so
- * they're not exercised here — see `shared-budget-writes.service.e2e.ts` for the
- * 400 cannotManuallyLinkToCategoryBudget assertion.
+ * Category-type budgets also take a `write` recipient's hand-linked transactions;
+ * `shared-budget-writes.service.e2e.ts` covers that, and that excluding matches
+ * needs `manage`.
  */
 
 import { type RecordId, RESOURCE_TYPES, SHARE_PERMISSIONS, TRANSACTION_TYPES } from '@bt/shared/types';

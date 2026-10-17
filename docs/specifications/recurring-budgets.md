@@ -133,3 +133,20 @@ Per-period limit overrides, rollover, manual links on category budgets, tag rule
 - Should the history chart show periods before the first transaction? (Default: yes, from period 0, as zeroes.)
 - Week start for quarterly cumulative steps follows the user's locale or Monday? (Default: Monday, matching
   `spending-stats`.)
+
+## Step 2: hand overrides on category budgets
+
+- **Link by hand.** `POST /budgets/:id/transactions` now works on category budgets too. A linked transaction the
+  categories don't match counts whole; one they already match counts once, by its matching parts. Linking is
+  idempotent, so the add dialog's "Select all" can include rows that are already linked.
+- **Exclude.** `POST` / `DELETE /budgets/:id/excluded-transactions` take matched transactions out and put them back.
+  Exclusions live in their own `BudgetExcludedTransactions` table, because every reader of `BudgetTransactions`
+  treats a row as "in the budget". Excluding needs `manage` (it changes what the budget counts); linking keeps
+  needing `write`. Excluding drops any hand link to the transaction, and linking clears an exclusion.
+- **One definition of scope.** `collectBudgetEntries` is now the only place that decides what a budget counts;
+  stats, the spending breakdown, period history and the category transaction list all read from it.
+- **Split remainder fix.** A transaction with splits used to count only through its splits, so the part left on
+  its own category was dropped ($100 groceries with $40 split off counted as $40 in a groceries budget). It now
+  counts the remainder, as the global stats do.
+- **One detail page.** `budget-info.vue` replaces the separate category and manual pages. Category budgets list
+  each row's source ("Added by hand"), with exclude / remove actions and an "Excluded" section to restore from.

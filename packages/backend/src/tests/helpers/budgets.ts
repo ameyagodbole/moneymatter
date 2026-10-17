@@ -237,8 +237,18 @@ interface CategoryBudgetTransactionsResponse {
       color: string;
     };
     effectiveRefAmount?: number;
+    source: 'rule' | 'linked';
   }>;
   total: number;
+  excluded: Array<{
+    id: string;
+    time: Date;
+    transactionType: string;
+    refAmount: number;
+    note: string | null;
+    accountId: string;
+    category?: { id: string; name: string; color: string };
+  }>;
 }
 
 export async function getCategoryBudgetTransactions<R extends boolean | undefined = undefined>({
@@ -279,6 +289,40 @@ export async function getSpendingStats<R extends boolean | undefined = undefined
   return makeRequest<endpointsTypes.BudgetSpendingStatsResponse, R>({
     method: 'get',
     url: `/budgets/${id}/spending-stats${at ? `?at=${encodeURIComponent(at)}` : ''}`,
+    raw,
+  });
+}
+
+export async function excludeTransactionsFromBudget<R extends boolean | undefined = undefined>({
+  id,
+  payload,
+  raw,
+}: {
+  id: string;
+  payload: linkTransactionToBudgetPayload;
+  raw?: R;
+}) {
+  return makeRequest<{ excludedCount: number }, R>({
+    method: 'post',
+    url: `/budgets/${id}/excluded-transactions`,
+    payload,
+    raw,
+  });
+}
+
+export async function restoreExcludedTransactions<R extends boolean | undefined = undefined>({
+  id,
+  payload,
+  raw,
+}: {
+  id: string;
+  payload: linkTransactionToBudgetPayload;
+  raw?: R;
+}) {
+  return makeRequest<{ restoredCount: number }, R>({
+    method: 'delete',
+    url: `/budgets/${id}/excluded-transactions`,
+    payload,
     raw,
   });
 }

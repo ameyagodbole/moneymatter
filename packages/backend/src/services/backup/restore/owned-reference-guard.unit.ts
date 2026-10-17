@@ -17,6 +17,7 @@ const EXPECTED_GUARDED_COLUMNS: Record<string, string[]> = {
   accounts: ['bankDataProviderConnectionId'],
   balances: ['accountId'],
   'budget-categories': ['budgetId', 'categoryId'],
+  'budget-excluded-transactions': ['budgetId', 'transactionId'],
   'budget-transactions': ['budgetId', 'transactionId'],
   categories: ['parentId'],
   holdings: ['portfolioId'],

@@ -324,7 +324,7 @@ describe('Shared budget writes', () => {
   });
 
   describe('write recipient on a category-type budget', () => {
-    it('POST /budgets/:id/transactions → 400 cannotManuallyLinkToCategoryBudget', async () => {
+    const setUpSharedCategoryBudget = async () => {
       const category = await helpers.addCustomCategory({
         name: 'Cat budget cat',
         color: '#123456',
@@ -338,7 +338,11 @@ describe('Shared budget writes', () => {
       });
       const recipient = await helpers.provisionSecondUserWithBaseCurrency();
       await shareBudget({ budgetId: budget.id, recipient, permission: SHARE_PERMISSIONS.write });
+      return { budget, recipient };
+    };
 
+    it("POST /budgets/:id/transactions links the recipient's own transaction and it counts", async () => {
+      const { budget, recipient } = await setUpSharedCategoryBudget();
       const recipientTx = await recipientCreatesTx({ cookies: recipient.cookies });
 
       const res = await helpers.asUser({
@@ -350,8 +354,31 @@ describe('Shared budget writes', () => {
             raw: false,
           }),
       });
+      expect(res.statusCode).toBe(200);
 
-      expect(res.statusCode).toBe(ERROR_CODES.ValidationError);
+      const stats = await helpers.getStats({ id: budget.id, raw: true });
+      expect(stats!.summary.transactionsCount).toBe(1);
+    });
+
+    it('POST /budgets/:id/excluded-transactions needs manage, so write gets 404', async () => {
+      const { budget, recipient } = await setUpSharedCategoryBudget();
+      const account = await helpers.createAccount({ raw: true });
+      const [ownerTx] = await helpers.createTransaction({
+        payload: helpers.buildTransactionPayload({ accountId: account.id, categoryId: budget.categories![0]!.id }),
+        raw: true,
+      });
+
+      const res = await helpers.asUser({
+        cookies: recipient.cookies,
+        fn: () =>
+          helpers.excludeTransactionsFromBudget({
+            id: budget.id,
+            payload: { transactionIds: [ownerTx!.id] },
+            raw: false,
+          }),
+      });
+
+      expect(res.statusCode).toBe(ERROR_CODES.NotFoundError);
     });
   });
 

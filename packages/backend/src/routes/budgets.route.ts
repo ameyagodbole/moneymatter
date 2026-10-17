@@ -2,6 +2,7 @@ import addTransactionsToBudget from '@controllers/budgets/add-transaction-to-bud
 import createBudget from '@controllers/budgets/create-budget';
 import deleteBudget from '@controllers/budgets/delete-budgets';
 import editBudget from '@controllers/budgets/edit-budget';
+import { excludeTransactions, restoreTransactions } from '@controllers/budgets/excluded-transactions';
 import { getBudgetById, getBudgets } from '@controllers/budgets/get-budgets';
 import getCategoryBudgetTransactions from '@controllers/budgets/get-category-budget-transactions';
 import getPeriods from '@controllers/budgets/get-periods';
@@ -81,6 +82,23 @@ router.delete(
   checkBaseCurrencyLock,
   validateEndpoint(removeTransactionsFromBudget.schema),
   removeTransactionsFromBudget.handler,
+);
+
+router.post(
+  '/:id/excluded-transactions',
+  authenticateSession,
+  blockDemoUsers,
+  checkBaseCurrencyLock,
+  validateEndpoint(excludeTransactions.schema),
+  excludeTransactions.handler,
+);
+router.delete(
+  '/:id/excluded-transactions',
+  authenticateSession,
+  blockDemoUsers,
+  checkBaseCurrencyLock,
+  validateEndpoint(restoreTransactions.schema),
+  restoreTransactions.handler,
 );
 
 export default router;

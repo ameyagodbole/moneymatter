@@ -1,24 +1,69 @@
-import { BUDGET_TYPES, TRANSACTION_TRANSFER_NATURE, TRANSACTION_TYPES } from '@bt/shared/types';
+import { BUDGET_TYPES, TRANSACTION_TYPES } from '@bt/shared/types';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
 import { t } from '@i18n/index';
 import { ValidationError } from '@js/errors';
-import Accounts from '@models/accounts.model';
 import Budgets from '@models/budget.model';
 import Categories from '@models/categories.model';
 import TransactionSplits from '@models/transaction-splits.model';
-import { PlannedPolicy, transactionsInclude } from '@models/transactions-query';
-import * as Transactions from '@models/transactions.model';
-import { statsTransactions } from '@services/stats/stats-transactions';
+import { findTransactions } from '@models/transactions-query';
 import { Op } from 'sequelize';
 
 import { authorizeBudgetRead } from './authorize-budget-access';
 import { resolveBudgetWindow } from './utils/budget-window';
-import { buildDateFilter } from './utils/build-date-filter';
+import {
+  type BudgetEntry,
+  type BudgetEntrySource,
+  collectBudgetEntries,
+  loadExcludedTransactionIds,
+} from './utils/collect-budget-entries';
+
+interface CategoryRef {
+  id: string;
+  name: string;
+  color: string;
+}
+
+interface TransactionWithCategory {
+  id: string;
+  time: Date;
+  transactionType: TRANSACTION_TYPES;
+  refAmount: number;
+  amount: number;
+  note: string | null;
+  categoryId: string | null;
+  accountId: string;
+  /** For split transactions, this is the split's category */
+  effectiveCategory?: CategoryRef;
+  /** For split transactions, this is the split amount */
+  effectiveRefAmount?: number;
+  /** Matched by the budget's categories, or linked by hand. */
+  source: BudgetEntrySource;
+}
+
+interface ExcludedTransaction {
+  id: string;
+  time: Date;
+  transactionType: TRANSACTION_TYPES;
+  refAmount: number;
+  note: string | null;
+  accountId: string;
+  category?: CategoryRef;
+}
+
+interface GetCategoryBudgetTransactionsParams {
+  userId: number;
+  budgetId: string;
+  from?: number;
+  limit?: number;
+  /** Recurring budgets list the period containing this instant (default now). */
+  at?: Date;
+}
 
 /**
- * Get transactions for a category-based budget.
- * Returns transactions that match the budget's categories, handling split transactions
- * by returning only the matching split portion.
+ * Transactions a category budget counts, newest first: the category matches (a split
+ * transaction as one row per matching split) and the transactions linked by hand. Also
+ * returns the transactions excluded by hand within the same window, so they can be put
+ * back.
  */
 export const getCategoryBudgetTransactions = async ({
   userId,
@@ -42,159 +87,135 @@ export const getCategoryBudgetTransactions = async ({
     throw new ValidationError({ message: t({ key: 'budgets.notCategoryBudget' }) });
   }
 
-  const categoryIds = budget.categories?.map((c) => c.id) || [];
-
-  if (!categoryIds.length) {
-    return { transactions: [], total: 0 };
-  }
-
   const window = resolveBudgetWindow({ budget, at });
-  const dateFilter = buildDateFilter({ startDate: window.from, endDate: window.to });
+  const [{ entries }, excludedIds] = await Promise.all([
+    collectBudgetEntries({ budget, ownerUserId, callerUserId: userId, isOwner, from: window.from, to: window.to }),
+    loadExcludedTransactionIds({ budgetId }),
+  ]);
 
-  // Planned rows are owner-only: they count as spent for the owner, but a share
-  // recipient must never see them.
-  const planned: PlannedPolicy = isOwner ? 'include' : 'exclude';
+  const sorted = entries.toSorted((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+  const page = sorted.slice(from, from + limit);
 
-  // Get transactions where primary category matches and have no splits
-  const { rows: primaryCategoryTransactions } = await statsTransactions({
-    access: { creator: ownerUserId },
-    planned,
-    refunds: 'ignore',
-    window: { from: window.from ?? undefined, to: window.to ?? undefined },
-    where: { categoryId: { [Op.in]: categoryIds } },
-    include: [
-      { model: TransactionSplits, as: 'splits', required: false },
-      { model: Categories, as: 'category', attributes: ['id', 'name', 'color'] },
-    ],
-    order: [['time', 'DESC']],
+  const [transactions, excluded] = await Promise.all([
+    hydrateEntries({ entries: page }),
+    loadExcludedTransactions({ excludedIds: [...excludedIds], window }),
+  ]);
+
+  return { transactions, total: sorted.length, excluded };
+};
+
+const loadCategories = async ({ ids }: { ids: string[] }) => {
+  if (!ids.length) return new Map<string, CategoryRef>();
+  const categories = await Categories.findAll({
+    where: { id: { [Op.in]: ids } },
+    attributes: ['id', 'name', 'color'],
   });
+  return new Map<string, CategoryRef>(categories.map((c) => [c.id, { id: c.id, name: c.name, color: c.color }]));
+};
 
-  // Get splits that match the categories
-  const matchingSplits = await TransactionSplits.findAll({
-    where: {
-      userId: ownerUserId,
-      categoryId: { [Op.in]: categoryIds },
-    },
-    include: [
-      transactionsInclude({
-        planned,
-        required: true,
-        as: 'transaction',
-        where: {
-          transferNature: TRANSACTION_TRANSFER_NATURE.not_transfer,
-          ...dateFilter,
-        },
-        attributes: ['id', 'time', 'transactionType', 'note', 'accountId'],
-        include: [{ model: Accounts, where: { excludeFromStats: false }, attributes: [] }],
-      }),
+/**
+ * Turns counted entries into list rows. The ids come from `collectBudgetEntries`, which
+ * already applied the budget's visibility rules, so the lookup itself is unscoped.
+ */
+const hydrateEntries = async ({ entries }: { entries: BudgetEntry[] }): Promise<TransactionWithCategory[]> => {
+  if (!entries.length) return [];
+
+  const transactionIds = [...new Set(entries.map((e) => e.transactionId))];
+  const splitIds = entries.map((e) => e.splitId).filter((id): id is string => id !== null);
+
+  const [transactions, splits, categories] = await Promise.all([
+    findTransactions({
+      planned: 'include',
+      access: 'unscoped-internal',
+      balanceAdjustments: 'include',
+      completeness: 'all',
+      where: { id: { [Op.in]: transactionIds } },
+      attributes: ['id', 'time', 'transactionType', 'refAmount', 'amount', 'note', 'categoryId', 'accountId'],
+    }),
+    splitIds.length
+      ? TransactionSplits.findAll({ where: { id: { [Op.in]: splitIds } }, attributes: ['id', 'amount', 'refAmount'] })
+      : Promise.resolve([] as TransactionSplits[]),
+    loadCategories({
+      ids: [...new Set(entries.map((e) => e.categoryId).filter((id): id is NonNullable<typeof id> => id !== null))],
+    }),
+  ]);
+
+  const txById = new Map<string, (typeof transactions)[number]>(transactions.map((tx) => [tx.id, tx]));
+  const splitById = new Map<string, TransactionSplits>(splits.map((split) => [split.id, split]));
+
+  return entries.flatMap((entry) => {
+    const tx = txById.get(entry.transactionId);
+    if (!tx) return [];
+    const split = entry.splitId ? splitById.get(entry.splitId) : undefined;
+    // Without a split the entry may still be partial: what the splits left on the
+    // transaction's own category. Scale the original-currency amount the same way.
+    const refAmount = split ? split.refAmount.toNumber() : entry.cents / 100;
+    const txRefCents = tx.refAmount.toCents();
+    const amount = split
+      ? split.amount.toNumber()
+      : txRefCents === entry.cents || txRefCents === 0
+        ? tx.amount.toNumber()
+        : Math.round((tx.amount.toNumber() * entry.cents * 100) / txRefCents) / 100;
+
+    return [
       {
-        model: Categories,
-        as: 'category',
-        attributes: ['id', 'name', 'color'],
+        id: tx.id,
+        time: tx.time,
+        transactionType: tx.transactionType,
+        refAmount,
+        amount,
+        note: tx.note,
+        categoryId: entry.categoryId,
+        accountId: tx.accountId,
+        effectiveCategory: entry.categoryId ? categories.get(entry.categoryId) : undefined,
+        effectiveRefAmount: refAmount,
+        source: entry.source,
       },
-    ],
+    ];
+  });
+};
+
+const loadExcludedTransactions = async ({
+  excludedIds,
+  window,
+}: {
+  excludedIds: string[];
+  window: { from: Date | null; to: Date | null };
+}): Promise<ExcludedTransaction[]> => {
+  if (!excludedIds.length) return [];
+
+  const transactions = await findTransactions({
+    planned: 'include',
+    access: 'unscoped-internal',
+    balanceAdjustments: 'include',
+    completeness: 'all',
+    where: {
+      id: { [Op.in]: excludedIds },
+      ...(window.from || window.to
+        ? {
+            time: {
+              ...(window.from && { [Op.gte]: window.from }),
+              ...(window.to && { [Op.lte]: window.to }),
+            },
+          }
+        : {}),
+    },
+    attributes: ['id', 'time', 'transactionType', 'refAmount', 'note', 'categoryId', 'accountId'],
   });
 
-  // Combine results
-  const results: TransactionWithCategory[] = [];
-  const seenTransactionIds = new Set<string>();
+  const categories = await loadCategories({
+    ids: [...new Set(transactions.map((tx) => tx.categoryId).filter((id): id is NonNullable<typeof id> => !!id))],
+  });
 
-  // Process primary category transactions (only those WITHOUT splits)
-  for (const tx of primaryCategoryTransactions) {
-    const splits = tx.get('splits') as TransactionSplits[] | undefined;
-    const category = tx.get('category') as Categories | undefined;
-
-    // If transaction has splits, skip it here - we'll include split entries separately
-    if (splits && splits.length > 0) {
-      continue;
-    }
-
-    seenTransactionIds.add(tx.id);
-    results.push({
+  return transactions
+    .map((tx) => ({
       id: tx.id,
       time: tx.time,
       transactionType: tx.transactionType,
       refAmount: tx.refAmount.toNumber(),
-      amount: tx.amount.toNumber(),
       note: tx.note,
-      categoryId: tx.categoryId,
       accountId: tx.accountId,
-      effectiveCategory: category
-        ? {
-            id: category.id,
-            name: category.name,
-            color: category.color,
-          }
-        : undefined,
-      effectiveRefAmount: tx.refAmount.toNumber(),
-    });
-  }
-
-  // Process splits - add each matching split as a separate entry
-  for (const split of matchingSplits) {
-    const transaction = split.get('transaction') as Transactions.default;
-    const category = split.get('category') as Categories | undefined;
-
-    if (!transaction) continue;
-
-    results.push({
-      id: transaction.id,
-      time: transaction.time,
-      transactionType: transaction.transactionType,
-      refAmount: split.refAmount.toNumber(),
-      amount: split.amount.toNumber(),
-      note: transaction.note,
-      categoryId: split.categoryId,
-      accountId: transaction.accountId,
-      effectiveCategory: category
-        ? {
-            id: category.id,
-            name: category.name,
-            color: category.color,
-          }
-        : undefined,
-      effectiveRefAmount: split.refAmount.toNumber(),
-    });
-
-    seenTransactionIds.add(transaction.id);
-  }
-
-  // Sort by time DESC
-  results.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-
-  const total = results.length;
-  const paginatedResults = results.slice(from, from + limit);
-
-  return {
-    transactions: paginatedResults,
-    total,
-  };
+      category: tx.categoryId ? categories.get(tx.categoryId) : undefined,
+    }))
+    .toSorted((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 };
-
-interface TransactionWithCategory {
-  id: string;
-  time: Date;
-  transactionType: TRANSACTION_TYPES;
-  refAmount: number;
-  amount: number;
-  note: string | null;
-  categoryId: string | null;
-  accountId: string;
-  /** For split transactions, this is the split's category */
-  effectiveCategory?: {
-    id: string;
-    name: string;
-    color: string;
-  };
-  /** For split transactions, this is the split amount */
-  effectiveRefAmount?: number;
-}
-
-interface GetCategoryBudgetTransactionsParams {
-  userId: number;
-  budgetId: string;
-  from?: number;
-  limit?: number;
-  /** Recurring budgets list the period containing this instant (default now). */
-  at?: Date;
-}

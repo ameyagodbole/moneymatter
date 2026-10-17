@@ -2,7 +2,7 @@
 import CategoryMultiSelectField from '@/components/fields/category-multi-select-field.vue';
 import InputField from '@/components/fields/input-field.vue';
 import Button from '@/components/lib/ui/button/Button.vue';
-import { BUDGET_RECURRENCES, type BudgetModel } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_TYPES, type BudgetModel } from '@bt/shared/types';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
@@ -28,6 +28,7 @@ const formData = ref({
 });
 const schedule = ref<BudgetSchedule>({ recurrence: BUDGET_RECURRENCES.none, startDate: null, endDate: null });
 const isScheduleDirty = ref(false);
+const isCategoryBudget = computed(() => props.budget.type === BUDGET_TYPES.category);
 
 // Initialize form data from budget prop on mount
 const initFormData = () => {
@@ -69,7 +70,7 @@ const handleSave = () => {
     buildBudgetEditPayload({
       name: formData.value.name,
       limitAmount: formData.value.limitAmount,
-      categoryIds: formData.value.categoryIds,
+      ...(isCategoryBudget.value && { categoryIds: formData.value.categoryIds }),
       // Only a changed schedule is sent, so saving a rename never moves the periods to this browser's zone.
       ...(isScheduleDirty.value && { schedule: schedule.value, timezone: getBrowserTimezone() }),
     }),
@@ -100,6 +101,7 @@ const handleSave = () => {
       :disabled="isLoading"
     />
     <CategoryMultiSelectField
+      v-if="isCategoryBudget"
       v-model="formData.categoryIds"
       :label="t('budgets.categoryBudget.settings.categoriesLabel')"
       :disabled="isLoading"

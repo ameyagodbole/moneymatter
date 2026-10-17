@@ -1,14 +1,10 @@
 import type { RecordId } from '@bt/shared/types';
-import { BUDGET_TYPES, TRANSACTION_TRANSFER_NATURE, TRANSACTION_TYPES } from '@bt/shared/types';
+import { BUDGET_TYPES, TRANSACTION_TYPES } from '@bt/shared/types';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
 import { t } from '@i18n/index';
-import Accounts from '@models/accounts.model';
 import Budgets from '@models/budget.model';
 import Categories from '@models/categories.model';
-import TransactionSplits from '@models/transaction-splits.model';
-import { PlannedPolicy, transactionsInclude } from '@models/transactions-query';
 import * as Transactions from '@models/transactions.model';
-import { statsTransactions } from '@services/stats/stats-transactions';
 import {
   addMonths,
   addWeeks,
@@ -26,7 +22,7 @@ import { Op } from 'sequelize';
 
 import { authorizeBudgetRead } from './authorize-budget-access';
 import { type BudgetWindow, resolveBudgetWindow } from './utils/budget-window';
-import { buildDateFilter } from './utils/build-date-filter';
+import { collectBudgetEntries } from './utils/collect-budget-entries';
 import { type BudgetRefundPair, fetchBudgetRefundPairs } from './utils/refund-pairs';
 
 interface CategoryInfo {
@@ -560,138 +556,85 @@ const getManualBudgetSpendingStats = async ({
 };
 
 /**
- * Category budget: fetch transactions by category IDs, handle splits
+ * Category budget: everything `collectBudgetEntries` counts (category matches, minus
+ * hand exclusions, plus hand links), grouped by the highest tracked category. A linked
+ * transaction outside the tracked tree groups under its own root category, or under
+ * "Other" when the category isn't the owner's (a share recipient's own category).
  */
 const getCategoryBudgetSpendingStats = async ({
   userId,
   budget: budgetDetails,
   window,
   isOwner,
+  callerUserId,
 }: {
   userId: number;
   budget: Budgets;
   window: BudgetWindow;
   isOwner: boolean;
+  callerUserId: number;
 }): Promise<SpendingStatsResponse> => {
-  const budgetCategoryIds = budgetDetails.categories?.map((c) => c.id) || [];
+  const { entries, refundAdjustments } = await collectBudgetEntries({
+    budget: budgetDetails,
+    ownerUserId: userId,
+    callerUserId,
+    isOwner,
+    from: window.from,
+    to: window.to,
+  });
 
-  if (!budgetCategoryIds.length) return getEmptyResponse();
+  if (entries.length === 0) return getEmptyResponse();
 
-  const dateFilter = buildDateFilter({ startDate: window.from, endDate: window.to });
-
-  // Fetch all user categories for hierarchy
   const allCategoriesRaw = (await Categories.findAll({
     where: { userId },
     attributes: ['id', 'name', 'color', 'parentId'],
     raw: true,
   })) as unknown as { id: RecordId; name: string; color: string; parentId: RecordId | null }[];
   const categoryMap = buildCategoryMap({ categories: allCategoriesRaw });
-  const targetCategoryIds = new Set<RecordId>(budgetCategoryIds);
+  categoryMap.set(OTHER_CATEGORY_ID, { id: OTHER_CATEGORY_ID, name: 'Other', color: '#6B7280', parentId: null });
 
-  // Expand target categories to include all descendants
-  const expandedCategoryIds = new Set<RecordId>(budgetCategoryIds);
-  allCategoriesRaw.forEach((cat) => {
-    let current: CategoryInfo | undefined = categoryMap.get(cat.id);
+  const targetCategoryIds = new Set<RecordId>((budgetDetails.categories ?? []).map((c) => c.id));
+
+  const isUnderTarget = (categoryId: RecordId) => {
+    let current = categoryMap.get(categoryId);
     while (current) {
-      if (targetCategoryIds.has(current.id)) {
-        expandedCategoryIds.add(cat.id);
-        break;
-      }
-      if (current.parentId === null) break;
+      if (targetCategoryIds.has(current.id)) return true;
+      if (current.parentId === null) return false;
       current = categoryMap.get(current.parentId);
     }
-  });
+    return false;
+  };
 
-  // Planned rows are owner-only: they count as spent for the owner, but a share
-  // recipient must never see them.
-  const planned: PlannedPolicy = isOwner ? 'include' : 'exclude';
+  const resolveBucket = (categoryId: RecordId | null): RecordId | null => {
+    if (categoryId === null) return null;
+    if (!categoryMap.has(categoryId)) return OTHER_CATEGORY_ID;
+    if (isUnderTarget(categoryId)) return getTopLevelTargetCategoryId({ categoryId, categoryMap, targetCategoryIds });
+    return getRootCategoryId({ categoryId, categoryMap });
+  };
 
-  // Primary category transactions (without splits)
-  const { rows: primaryCategoryTransactions } = await statsTransactions({
-    access: { creator: userId },
-    planned,
-    refunds: 'ignore',
-    window: { from: window.from ?? undefined, to: window.to ?? undefined },
-    where: { categoryId: { [Op.in]: Array.from(expandedCategoryIds) } },
-    include: [{ model: TransactionSplits, as: 'splits', required: false }],
-  });
+  const ownChild = (categoryId: RecordId | null) =>
+    categoryId !== null && categoryMap.has(categoryId) ? categoryId : null;
 
-  // Matching splits
-  const matchingSplits = await TransactionSplits.findAll({
-    where: {
-      userId,
-      categoryId: { [Op.in]: Array.from(expandedCategoryIds) },
-    },
-    include: [
-      transactionsInclude({
-        planned,
-        required: true,
-        as: 'transaction',
-        where: {
-          transferNature: TRANSACTION_TRANSFER_NATURE.not_transfer,
-          ...dateFilter,
-        },
-        attributes: ['id', 'time', 'transactionType', 'refundLinked'],
-        include: [{ model: Accounts, where: { excludeFromStats: false }, attributes: [] }],
-      }),
-    ],
-  });
-
-  const txDataList: NormalizedTxData[] = [];
-  const countedTransactions: { id: string; refundLinked: boolean }[] = [];
-
-  // Process primary category transactions (only those WITHOUT splits)
-  for (const tx of primaryCategoryTransactions) {
-    const splits = tx.get('splits') as TransactionSplits[] | undefined;
-    if (splits && splits.length > 0) continue;
-
-    const topLevelCatId = getTopLevelTargetCategoryId({
-      categoryId: tx.categoryId!,
-      categoryMap,
-      targetCategoryIds,
-    });
-
-    txDataList.push({
-      time: tx.time,
-      amount: tx.refAmount.toCents(),
-      isExpense: tx.transactionType === TRANSACTION_TYPES.expense,
-      categoryId: topLevelCatId,
-      originalCategoryId: tx.categoryId!,
-    });
-    countedTransactions.push({ id: tx.id, refundLinked: tx.refundLinked });
-  }
-
-  // Process splits
-  for (const split of matchingSplits) {
-    const transaction = split.get('transaction') as Transactions.default;
-    if (!transaction) continue;
-
-    const topLevelCatId = getTopLevelTargetCategoryId({
-      categoryId: split.categoryId,
-      categoryMap,
-      targetCategoryIds,
-    });
-
-    txDataList.push({
-      time: transaction.time,
-      amount: split.refAmount.toCents(),
-      isExpense: transaction.transactionType === TRANSACTION_TYPES.expense,
-      categoryId: topLevelCatId,
-      originalCategoryId: split.categoryId,
-    });
-    countedTransactions.push({ id: transaction.id, refundLinked: transaction.refundLinked });
-  }
-
-  if (txDataList.length === 0) return getEmptyResponse();
-
-  const refundPairs = await fetchBudgetRefundPairs({ countedTransactions });
-  const refundAdjustments = buildRefundAdjustments({
-    pairs: refundPairs,
-    resolveCategoryBucket: (categoryId) => getTopLevelTargetCategoryId({ categoryId, categoryMap, targetCategoryIds }),
-  });
+  const txDataList: NormalizedTxData[] = [
+    ...entries.map((entry) => ({
+      time: entry.time,
+      amount: entry.cents,
+      isExpense: entry.isExpense,
+      categoryId: resolveBucket(entry.categoryId),
+      originalCategoryId: ownChild(entry.categoryId),
+    })),
+    ...refundAdjustments.map((adjustment) => ({
+      time: adjustment.time,
+      amount: adjustment.cents,
+      isExpense: adjustment.isExpense,
+      categoryId: adjustment.isExpense ? resolveBucket(adjustment.categoryId) : null,
+      originalCategoryId: adjustment.isExpense ? ownChild(adjustment.categoryId) : null,
+      negative: true,
+    })),
+  ];
 
   return aggregateTransactionData({
-    txDataList: [...txDataList, ...refundAdjustments],
+    txDataList,
     budgetStartDate: window.period?.start ?? budgetDetails.startDate,
     budgetEndDate: window.period?.end ?? budgetDetails.endDate,
     categoryMap,
@@ -724,7 +667,13 @@ export const getBudgetSpendingStats = async ({
   const window = resolveBudgetWindow({ budget: budgetDetails, at });
 
   if (budgetDetails.type === BUDGET_TYPES.category) {
-    return getCategoryBudgetSpendingStats({ userId: ownerUserId, budget: budgetDetails, window, isOwner });
+    return getCategoryBudgetSpendingStats({
+      userId: ownerUserId,
+      budget: budgetDetails,
+      window,
+      isOwner,
+      callerUserId: userId,
+    });
   }
 
   return getManualBudgetSpendingStats({ userId: ownerUserId, budget: budgetDetails, window, callerUserId: userId });

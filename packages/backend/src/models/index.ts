@@ -11,6 +11,7 @@ import BillingSubscriptionsModel from './billing-subscriptions.model';
 import BillingWebhookEventsModel from './billing-webhook-events.model';
 import BrandLogosModel from './brand-logos.model';
 import BudgetCategoriesModel from './budget-categories.model';
+import BudgetExcludedTransactionsModel from './budget-excluded-transactions.model';
 import BudgetTransactionsModel from './budget-transactions.model';
 import BudgetModel from './budget.model';
 import CategoriesModel from './categories.model';
@@ -106,6 +107,7 @@ const models = [
   AccountGroupsModel,
   BudgetModel,
   BudgetCategoriesModel,
+  BudgetExcludedTransactionsModel,
   BudgetTransactionsModel,
   TagsModel,
   TagRemindersModel,

@@ -1,4 +1,3 @@
-import { BUDGET_TYPES } from '@bt/shared/types';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
 import { t } from '@i18n/index';
 import Budgets from '@models/budget.model';
@@ -91,9 +90,9 @@ const summarizeEntries = ({
  * Income, expense and limit usage for a budget. Recurring budgets report the period
  * containing `at` (default now); one-off budgets report their whole scope.
  *
- * Share-aware: a recipient sees the same numbers the owner would. Category budgets are
- * scoped to the owner's transactions; manual budgets count every linked row, so a `write`
- * recipient's attached transactions contribute too.
+ * Share-aware: a recipient sees the same numbers the owner would. Category matches are
+ * scoped to the owner's transactions; linked rows count whoever attached them, so a
+ * `write` recipient's attached transactions contribute too.
  */
 export const getBudgetStats = withTransaction(
   async ({ userId, budgetId, at }: { userId: number; budgetId: string; at?: Date }): Promise<StatsResponse> => {
@@ -107,11 +106,6 @@ export const getBudgetStats = withTransaction(
     });
 
     const { from, to, period } = resolveBudgetWindow({ budget, at });
-
-    // A category budget with no categories tracks nothing yet; it has no usage to report.
-    if (budget.type === BUDGET_TYPES.category && !budget.categories?.length) {
-      return { period, summary: getEmptySummary() };
-    }
 
     const collected = await collectBudgetEntries({
       budget,

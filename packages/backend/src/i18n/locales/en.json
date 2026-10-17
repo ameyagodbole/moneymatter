@@ -107,9 +107,9 @@
     "budgetNotFound": "Budget not found",
     "someTransactionIdsInvalid": "Some transactions IDs are invalid",
     "transactionsAddedSuccessfully": "Transactions added successfully",
-    "cannotManuallyLinkToCategoryBudget": "Cannot manually link transactions to category-based budgets. Transactions are tracked automatically by category.",
     "someCategoryIdsInvalid": "Some category IDs are invalid or do not exist",
     "notCategoryBudget": "This endpoint is only available for category-based budgets",
+    "exclusionsOnlyForCategoryBudgets": "Only category budgets have matched transactions to exclude. Unlink transactions from a manual budget instead",
     "recurringRequiresStartDate": "Recurring budgets need a start date",
     "notRecurringBudget": "This endpoint is only available for recurring budgets"
   },

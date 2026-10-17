@@ -407,6 +407,47 @@ describe('Category-Based Budgets', () => {
   });
 
   describe('Stats Calculation - Split Transactions', () => {
+    it('counts what the splits leave on a tracked primary category', async () => {
+      const groceries = await helpers.addCustomCategory({ name: 'Groceries', color: '#FF0000', raw: true });
+      const household = await helpers.addCustomCategory({ name: 'Household', color: '#00FF00', raw: true });
+      const account = await helpers.createAccount({ raw: true });
+
+      // $100 in groceries with $40 split off to household: $60 stays in groceries.
+      await helpers.createTransaction({
+        payload: helpers.buildTransactionPayload({
+          accountId: account.id,
+          amount: 100,
+          categoryId: groceries.id,
+          transactionType: TRANSACTION_TYPES.expense,
+          splits: [{ amount: 40, categoryId: household.id }],
+        }),
+        raw: true,
+      });
+
+      const groceriesBudget = await helpers.createCustomBudget({
+        name: 'Groceries',
+        type: BUDGET_TYPES.category,
+        categoryIds: [groceries.id],
+        raw: true,
+      });
+      const bothBudget = await helpers.createCustomBudget({
+        name: 'Both',
+        type: BUDGET_TYPES.category,
+        categoryIds: [groceries.id, household.id],
+        raw: true,
+      });
+
+      const groceriesStats = await helpers.getStats({ id: groceriesBudget.id, raw: true });
+      expect(groceriesStats!.summary.actualExpense).toBe(60);
+
+      const bothStats = await helpers.getStats({ id: bothBudget.id, raw: true });
+      expect(bothStats!.summary.actualExpense).toBe(100);
+      expect(bothStats!.summary.transactionsCount).toBe(1);
+
+      const list = await helpers.getCategoryBudgetTransactions({ id: groceriesBudget.id, raw: true });
+      expect(list.transactions.map((tx) => tx.refAmount)).toEqual([60]);
+    });
+
     it('counts only splits whose category the budget tracks', async () => {
       const category1 = await helpers.addCustomCategory({ name: 'Food', color: '#FF0000', raw: true });
       const category2 = await helpers.addCustomCategory({ name: 'Transport', color: '#00FF00', raw: true });
@@ -629,7 +670,7 @@ describe('Category-Based Budgets', () => {
       expect(stats!.summary.transactionsCount).toBe(1);
     });
 
-    it('category budget cannot have transactions manually linked', async () => {
+    it('category budget counts a transaction linked by hand outside its categories', async () => {
       const category = await helpers.addCustomCategory({ name: 'Test', color: '#FF0000', raw: true });
 
       // Create category budget
@@ -651,15 +692,16 @@ describe('Category-Based Budgets', () => {
         raw: true,
       });
 
-      // Try to manually link transaction to category budget - should fail or be ignored
       const response = await helpers.addTransactionToCustomBudget({
         id: budget.id,
         payload: { transactionIds: [tx.id] },
         raw: false,
       });
+      expect(response.statusCode).toBe(200);
 
-      // Category budgets should reject manual transaction linking
-      expect(response.statusCode).toBe(ERROR_CODES.ValidationError);
+      const stats = await helpers.getStats({ id: budget.id, raw: true });
+      expect(stats!.summary.actualExpense).toBe(100);
+      expect(stats!.summary.transactionsCount).toBe(1);
     });
   });
 

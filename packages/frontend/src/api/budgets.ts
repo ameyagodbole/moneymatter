@@ -138,12 +138,44 @@ export interface CategoryBudgetTransaction {
     color: string;
   };
   effectiveRefAmount?: number;
+  /** Matched by the budget's categories, or linked by hand. */
+  source: 'rule' | 'linked';
+}
+
+/** A transaction the budget's categories match but that was excluded by hand. */
+export interface ExcludedBudgetTransaction {
+  id: string;
+  time: string;
+  transactionType: 'income' | 'expense';
+  refAmount: number;
+  note: string | null;
+  accountId: string;
+  category?: { id: string; name: string; color: string };
 }
 
 interface CategoryBudgetTransactionsResponse {
   transactions: CategoryBudgetTransaction[];
   total: number;
+  /** Excluded transactions within the same period. */
+  excluded: ExcludedBudgetTransaction[];
 }
+
+export const excludeTransactionsFromBudget = async ({
+  budgetId,
+  transactionIds,
+}: {
+  budgetId: string;
+  transactionIds: string[];
+}): Promise<{ excludedCount: number }> => api.post(`/budgets/${budgetId}/excluded-transactions`, { transactionIds });
+
+export const restoreExcludedTransactions = async ({
+  budgetId,
+  transactionIds,
+}: {
+  budgetId: string;
+  transactionIds: string[];
+}): Promise<{ restoredCount: number }> =>
+  api.delete(`/budgets/${budgetId}/excluded-transactions`, { data: { transactionIds } });
 
 export const loadCategoryBudgetTransactions = async ({
   budgetId,

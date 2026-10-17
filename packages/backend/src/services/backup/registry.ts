@@ -8,6 +8,7 @@ import BillingSubscriptions from '@models/billing-subscriptions.model';
 import BillingWebhookEvents from '@models/billing-webhook-events.model';
 import BrandLogos from '@models/brand-logos.model';
 import BudgetCategories from '@models/budget-categories.model';
+import BudgetExcludedTransactions from '@models/budget-excluded-transactions.model';
 import BudgetTransactions from '@models/budget-transactions.model';
 import Budgets from '@models/budget.model';
 import Categories from '@models/categories.model';
@@ -428,6 +429,13 @@ export const BACKUP_TABLES: readonly BackupTableDef[] = [
   {
     fileName: 'budget-categories',
     model: BudgetCategories,
+    tier: 5,
+    scope: { strategy: 'viaParent', fk: 'budgetId', parent: 'budgets' },
+    restoreMode: 'insert',
+  },
+  {
+    fileName: 'budget-excluded-transactions',
+    model: BudgetExcludedTransactions,
     tier: 5,
     scope: { strategy: 'viaParent', fk: 'budgetId', parent: 'budgets' },
     restoreMode: 'insert',

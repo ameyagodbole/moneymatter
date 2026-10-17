@@ -27,7 +27,7 @@ describe('Budget Transactions', () => {
   };
 
   describe('Attach', () => {
-    it('fails when adding duplicate transaction to the same budget if unique constraint exists', async () => {
+    it('treats adding an already-linked transaction as a no-op', async () => {
       const account = await helpers.createAccount({ raw: true });
 
       const [transaction] = await helpers.createTransaction({
@@ -66,7 +66,11 @@ describe('Budget Transactions', () => {
         raw: false,
       });
 
-      expect(response.body?.status).toBe('error');
+      // Linking is idempotent, so "select all" in the add dialog can include rows that
+      // are already linked. The transaction still counts once.
+      expect(response.statusCode).toBe(200);
+      const stats = await helpers.getStats({ id: budget.id, raw: true });
+      expect(stats!.summary.transactionsCount).toBe(1);
     });
 
     it('attaches a balance-adjustment row in the same batch as a normal transaction', async () => {
