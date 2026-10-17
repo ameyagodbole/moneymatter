@@ -22,6 +22,7 @@ import * as UsersCurrencies from '@models/users-currencies.model';
 import { calculateRefAmount } from '@services/calculate-ref-amount.service';
 import { DOMAIN_EVENTS, eventBus } from '@services/common/event-bus';
 import { assertLoanPaymentAllowed } from '@services/loans/assert-loan-payment-allowed';
+import { resolveLoanPaymentCategoryId } from '@services/loans/resolve-loan-payment-category';
 import { applyPayeeCategorization } from '@services/payees/apply-categorization';
 import { applyPayeeDefaultLocation } from '@services/payees/apply-default-location';
 import { applyPayeeDefaultTags } from '@services/payees/apply-default-tags';
@@ -250,11 +251,17 @@ export const createOppositeTransaction = async (params: CreateOppositeTransactio
 
   const transferId = uuidv4();
 
+  // The payment leg counts as spend in stats, so it needs a real category (see the resolver).
+  const baseCategoryId = isLoanDestination
+    ? await resolveLoanPaymentCategoryId({ userId: baseTransaction.userId, categoryId: baseTransaction.categoryId })
+    : baseTransaction.categoryId;
+
   let baseTx = await Transactions.updateTransactionById({
     id: baseTransaction.id,
     userId: baseTransaction.userId,
     transferId,
     transferNature: oppositeTransferNature,
+    ...(baseCategoryId && baseCategoryId !== baseTransaction.categoryId ? { categoryId: baseCategoryId } : {}),
   });
 
   const { currency: oppositeTxCurrency } = await Accounts.getAccountCurrency({
@@ -302,7 +309,7 @@ export const createOppositeTransaction = async (params: CreateOppositeTransactio
   // Categories are per-user — copying the source-side category id onto a row owned by a
   // different user would point at a category the dest owner doesn't own. Drop it on
   // cross-user pairs; same-user transfers keep the existing copy-through behavior.
-  const oppositeCategoryId = isCrossUser ? undefined : baseTransaction.categoryId;
+  const oppositeCategoryId = isCrossUser ? undefined : (baseCategoryId ?? undefined);
 
   const oppositeTx = await Transactions.createTransaction({
     userId: destOwnerUserId,
