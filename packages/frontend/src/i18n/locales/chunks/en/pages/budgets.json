@@ -123,7 +123,10 @@
     "addTransactionsDialog": {
       "title": "Add Transactions to Budget",
       "addSelected": "Add Selected",
-      "clearSelection": "Clear selection"
+      "clearSelection": "Clear selection",
+      "selectAll": "Select all",
+      "selectedCount": "{count} selected | {count} selected",
+      "loadedOnlyHint": "Only the transactions loaded so far are selected. Scroll down to load more."
     },
     "categoryBudget": {
       "trackedCategories": "Tracked Categories",

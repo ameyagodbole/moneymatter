@@ -123,7 +123,10 @@
     "addTransactionsDialog": {
       "title": "Додати транзакції до бюджету",
       "addSelected": "Додати вибрані",
-      "clearSelection": "Очистити вибір"
+      "clearSelection": "Очистити вибір",
+      "selectAll": "Вибрати все",
+      "selectedCount": "Вибрано: {count} | Вибрано: {count} | Вибрано: {count}",
+      "loadedOnlyHint": "Вибрано лише завантажені досі транзакції. Прокрутіть вниз, щоб завантажити більше."
     },
     "categoryBudget": {
       "trackedCategories": "Відстежувані категорії",

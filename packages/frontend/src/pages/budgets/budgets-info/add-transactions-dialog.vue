@@ -19,6 +19,8 @@ import { computed, reactive, ref, watch, watchEffect } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 
+import { getSelectAllState } from './select-all-state';
+
 const { t } = useI18n();
 
 const route = useRoute();
@@ -90,6 +92,21 @@ const parentRef = computed<HTMLElement | null>(() => scrollAreaRef.value?.viewpo
 
 const flatTransactions = computed(() => transactionsPages.value?.pages?.flat() ?? []);
 
+// "Select all" covers the rows loaded so far, matching the transactions page.
+const loadedIds = computed(() => flatTransactions.value.map((tx) => tx.id));
+const selectAllState = computed(() =>
+  getSelectAllState({ loadedIds: loadedIds.value, selectedIds: pickedTransactionsIds }),
+);
+const isLoadedOnlyHintVisible = computed(() => selectAllState.value === true && !!hasNextTransactionsPage.value);
+
+const toggleSelectAll = () => {
+  if (selectAllState.value === true) {
+    loadedIds.value.forEach((id) => pickedTransactionsIds.delete(id));
+  } else {
+    loadedIds.value.forEach((id) => pickedTransactionsIds.add(id));
+  }
+};
+
 const { virtualRows, totalSize } = useVirtualizedInfiniteScroll({
   items: flatTransactions,
   hasNextPage: hasNextTransactionsPage,
@@ -150,6 +167,21 @@ const isMobileView = useWindowBreakpoints(1024);
       </div>
 
       <div v-if="transactionsPages" class="relative flex min-h-0 w-full flex-col">
+        <div v-if="loadedIds.length" class="flex shrink-0 flex-col gap-1 border-b pr-3 pb-2">
+          <div class="flex items-center justify-between gap-2">
+            <label class="flex cursor-pointer items-center gap-2 text-sm">
+              <Checkbox :model-value="selectAllState" @update:model-value="toggleSelectAll" />
+              {{ t('budgets.addTransactionsDialog.selectAll') }}
+            </label>
+            <span v-if="isTransactionsPicked" class="text-muted-foreground text-xs tabular-nums">
+              {{ t('budgets.addTransactionsDialog.selectedCount', pickedTransactionsIds.size) }}
+            </span>
+          </div>
+          <p v-if="isLoadedOnlyHintVisible" class="text-muted-foreground text-xs">
+            {{ t('budgets.addTransactionsDialog.loadedOnlyHint') }}
+          </p>
+        </div>
+
         <ScrollArea ref="scrollAreaRef" class="min-h-0 flex-1" viewport-class="h-full">
           <div :style="{ height: `${totalSize}px`, position: 'relative' }">
             <div
