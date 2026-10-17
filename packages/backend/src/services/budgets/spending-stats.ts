@@ -25,6 +25,7 @@ import {
 import { Op } from 'sequelize';
 
 import { authorizeBudgetRead } from './authorize-budget-access';
+import { type BudgetWindow, resolveBudgetWindow } from './utils/budget-window';
 import { buildDateFilter } from './utils/build-date-filter';
 import { type BudgetRefundPair, fetchBudgetRefundPairs } from './utils/refund-pairs';
 
@@ -463,17 +464,16 @@ const buildSharedBudgetMergeMap = ({
  */
 const getManualBudgetSpendingStats = async ({
   userId: ownerUserId,
-  budgetId,
+  budget: budgetDetails,
+  window,
   callerUserId,
 }: {
   userId: number;
-  budgetId: string;
+  budget: Budgets;
+  window: BudgetWindow;
   callerUserId: number;
 }): Promise<SpendingStatsResponse> => {
-  const budgetDetails = await findOrThrowNotFound({
-    query: Budgets.findOne({ where: { id: budgetId, userId: ownerUserId } }),
-    message: t({ key: 'budgets.budgetNotFound' }),
-  });
+  const budgetId = budgetDetails.id;
 
   const transactions = await Transactions.findWithFilters({
     excludeTransfer: true,
@@ -482,6 +482,8 @@ const getManualBudgetSpendingStats = async ({
     planned: { visibleTo: callerUserId },
     access: 'pre-scoped',
     balanceAdjustments: 'include',
+    ...(window.from && { startDate: window.from.toISOString() }),
+    ...(window.to && { endDate: window.to.toISOString() }),
     attributes: ['id', 'time', 'refAmount', 'transactionType', 'categoryId', 'refundLinked', 'userId'],
   });
 
@@ -551,8 +553,8 @@ const getManualBudgetSpendingStats = async ({
 
   return aggregateTransactionData({
     txDataList: [...txDataList, ...refundAdjustments],
-    budgetStartDate: budgetDetails.startDate,
-    budgetEndDate: budgetDetails.endDate,
+    budgetStartDate: window.period?.start ?? budgetDetails.startDate,
+    budgetEndDate: window.period?.end ?? budgetDetails.endDate,
     categoryMap,
   });
 };
@@ -562,29 +564,20 @@ const getManualBudgetSpendingStats = async ({
  */
 const getCategoryBudgetSpendingStats = async ({
   userId,
-  budgetId,
+  budget: budgetDetails,
+  window,
   isOwner,
 }: {
   userId: number;
-  budgetId: string;
+  budget: Budgets;
+  window: BudgetWindow;
   isOwner: boolean;
 }): Promise<SpendingStatsResponse> => {
-  const budgetDetails = await findOrThrowNotFound({
-    query: Budgets.findOne({
-      where: { id: budgetId, userId },
-      include: [{ model: Categories, as: 'categories', attributes: ['id'] }],
-    }),
-    message: t({ key: 'budgets.budgetNotFound' }),
-  });
-
   const budgetCategoryIds = budgetDetails.categories?.map((c) => c.id) || [];
 
   if (!budgetCategoryIds.length) return getEmptyResponse();
 
-  const dateFilter = buildDateFilter({
-    startDate: budgetDetails.startDate,
-    endDate: budgetDetails.endDate,
-  });
+  const dateFilter = buildDateFilter({ startDate: window.from, endDate: window.to });
 
   // Fetch all user categories for hierarchy
   const allCategoriesRaw = (await Categories.findAll({
@@ -618,7 +611,7 @@ const getCategoryBudgetSpendingStats = async ({
     access: { creator: userId },
     planned,
     refunds: 'ignore',
-    window: { from: budgetDetails.startDate ?? undefined, to: budgetDetails.endDate ?? undefined },
+    window: { from: window.from ?? undefined, to: window.to ?? undefined },
     where: { categoryId: { [Op.in]: Array.from(expandedCategoryIds) } },
     include: [{ model: TransactionSplits, as: 'splits', required: false }],
   });
@@ -699,8 +692,8 @@ const getCategoryBudgetSpendingStats = async ({
 
   return aggregateTransactionData({
     txDataList: [...txDataList, ...refundAdjustments],
-    budgetStartDate: budgetDetails.startDate,
-    budgetEndDate: budgetDetails.endDate,
+    budgetStartDate: window.period?.start ?? budgetDetails.startDate,
+    budgetEndDate: window.period?.end ?? budgetDetails.endDate,
     categoryMap,
   });
 };
@@ -708,9 +701,12 @@ const getCategoryBudgetSpendingStats = async ({
 export const getBudgetSpendingStats = async ({
   userId,
   budgetId,
+  at,
 }: {
   userId: number;
   budgetId: string;
+  /** Recurring budgets report the period containing this instant (default now). */
+  at?: Date;
 }): Promise<SpendingStatsResponse> => {
   // Share-aware auth: recipient sees the same numbers the owner would (per PRD
   // visibility decision). Downstream queries scope against the owner's userId so
@@ -718,13 +714,18 @@ export const getBudgetSpendingStats = async ({
   const { ownerUserId, isOwner } = await authorizeBudgetRead({ userId, budgetId });
 
   const budgetDetails = await findOrThrowNotFound({
-    query: Budgets.findOne({ where: { id: budgetId, userId: ownerUserId }, attributes: ['type'] }),
+    query: Budgets.findOne({
+      where: { id: budgetId, userId: ownerUserId },
+      include: [{ model: Categories, as: 'categories', attributes: ['id'] }],
+    }),
     message: t({ key: 'budgets.budgetNotFound' }),
   });
 
+  const window = resolveBudgetWindow({ budget: budgetDetails, at });
+
   if (budgetDetails.type === BUDGET_TYPES.category) {
-    return getCategoryBudgetSpendingStats({ userId: ownerUserId, budgetId, isOwner });
+    return getCategoryBudgetSpendingStats({ userId: ownerUserId, budget: budgetDetails, window, isOwner });
   }
 
-  return getManualBudgetSpendingStats({ userId: ownerUserId, budgetId, callerUserId: userId });
+  return getManualBudgetSpendingStats({ userId: ownerUserId, budget: budgetDetails, window, callerUserId: userId });
 };

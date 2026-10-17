@@ -1,21 +1,26 @@
-import { BUDGET_TYPES, SHARE_PERMISSIONS } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_TYPES, SHARE_PERMISSIONS } from '@bt/shared/types';
 import { Money } from '@common/types/money';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
 import { t } from '@i18n/index';
+import { ValidationError } from '@js/errors';
 import BudgetCategories from '@models/budget-categories.model';
 import Budgets from '@models/budget.model';
 import Categories from '@models/categories.model';
 import { withTransaction } from '@services/common/with-transaction';
 
 import { authorizeBudgetAccess } from './authorize-budget-access';
+import { normalizeRecurringDates } from './utils/budget-periods';
 import { expandCategoryIds } from './utils/expand-category-ids';
 
 interface EditBudgetPayload {
   id: string;
   userId: number;
   name?: string;
+  recurrence?: BUDGET_RECURRENCES;
+  timezone?: string | null;
   startDate?: string;
-  endDate?: string;
+  /** `null` clears the end date, so a recurring budget repeats until archived. */
+  endDate?: string | null;
   limitAmount?: Money;
   autoInclude?: boolean;
   categoryIds?: string[];
@@ -37,7 +42,7 @@ export const editBudget = withTransaction(async ({ id, userId, categoryIds, ...p
     message: t({ key: 'budgets.budgetNotFound' }),
   });
 
-  await budget.update(params);
+  await budget.update({ ...params, ...resolveDates({ budget, params }) });
 
   // Update categories if provided and budget is category-based
   if (categoryIds !== undefined && budget.type === BUDGET_TYPES.category) {
@@ -72,3 +77,41 @@ export const editBudget = withTransaction(async ({ id, userId, categoryIds, ...p
 
   return updatedBudget;
 });
+
+/**
+ * Dates to store after the edit. Recurring budgets are normalised against the merged
+ * state (stored values overlaid with the edit), so changing only the recurrence or only
+ * the start still leaves the dates on period boundaries.
+ */
+const resolveDates = ({
+  budget,
+  params,
+}: {
+  budget: Budgets;
+  params: Omit<EditBudgetPayload, 'id' | 'userId' | 'categoryIds'>;
+}): { startDate?: Date | null; endDate?: Date | null } => {
+  const recurrence = params.recurrence ?? budget.recurrence;
+  const startDate = params.startDate !== undefined ? new Date(params.startDate) : budget.startDate;
+  const endDate =
+    params.endDate === undefined ? budget.endDate : params.endDate === null ? null : new Date(params.endDate);
+
+  if (recurrence === BUDGET_RECURRENCES.none) {
+    return {
+      ...(params.startDate !== undefined && { startDate }),
+      ...(params.endDate !== undefined && { endDate }),
+    };
+  }
+
+  if (!startDate) {
+    throw new ValidationError({ message: t({ key: 'budgets.recurringRequiresStartDate' }) });
+  }
+
+  return normalizeRecurringDates({
+    budget: {
+      recurrence,
+      timezone: params.timezone !== undefined ? params.timezone : budget.timezone,
+      startDate,
+      endDate,
+    },
+  });
+};

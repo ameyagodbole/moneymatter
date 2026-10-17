@@ -7,6 +7,12 @@
     "backToList": "Back to budgets",
     "newBudget": "New Budget",
     "createBudget": "Create budget",
+    "recurrence": {
+      "none": "Doesn't repeat",
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "yearly": "Yearly"
+    },
     "creation": {
       "success": "Budget created",
       "error": "Unexpected error!",
@@ -21,14 +27,26 @@
       "categoriesRequired": "Select at least one category",
       "fromDateLabel": "From date",
       "toDateLabel": "To date",
+      "recurrenceLabel": "Repeats",
+      "recurrencePlaceholder": "Choose how often it resets",
+      "recurrenceHint": {
+        "monthly": "Resets every month on the start date's day. The limit applies to each month.",
+        "quarterly": "Resets every 3 months from the start date. The limit applies to each quarter.",
+        "yearly": "Resets every year on the start date. The limit applies to each year."
+      },
+      "startsOnLabel": "Starts on",
+      "endsOnLabel": "Ends on (optional)",
+      "limitPerPeriodLabel": {
+        "monthly": "Monthly limit",
+        "quarterly": "Quarterly limit",
+        "yearly": "Yearly limit"
+      },
       "autoIncludeLabel": "Auto include transactions",
       "limitLabel": "Budget limit",
       "limitPlaceholder": "Enter the limit",
       "submitButton": "Add budget"
     },
     "list": {
-      "tabCategory": "Category Budgets",
-      "tabManual": "Manual Budgets",
       "edit": "Edit",
       "delete": "Delete",
       "deleteSuccess": "Budget deleted successfully!",
@@ -41,6 +59,11 @@
         "description": "By clicking \"Accept\", all associated transactions will be unlinked from the budget but will remain in the system."
       },
       "limitLabel": "Limit: {amount}",
+      "limitPerPeriod": {
+        "monthly": "Limit: {amount} / month",
+        "quarterly": "Limit: {amount} / quarter",
+        "yearly": "Limit: {amount} / year"
+      },
       "transactionsCount": "{count} transactions",
       "categoriesCount": "{count} categories",
       "noTransactions": "No transactions yet",
@@ -69,6 +92,24 @@
         "title": "No budgets yet",
         "description": "Create a budget to start tracking your spending or monitoring specific events."
       }
+    },
+    "recurring": {
+      "periodChart": {
+        "title": "Spending by period",
+        "noData": "No periods to show yet"
+      },
+      "spent": "Spent",
+      "limit": "Limit",
+      "used": "Used",
+      "overLimit": "Over limit",
+      "loadError": "Couldn't load this budget's periods",
+      "spentThisPeriod": "Spent this period",
+      "vsPreviousPeriod": "vs previous period",
+      "previousPeriod": "Previous period",
+      "limitUsed": "Limit used",
+      "previousPeriodButton": "Previous period",
+      "nextPeriodButton": "Next period",
+      "currentPeriodButton": "Back to current period"
     },
     "settings": {
       "nameLabel": "Budget name",

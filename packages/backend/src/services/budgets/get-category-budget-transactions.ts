@@ -12,6 +12,7 @@ import { statsTransactions } from '@services/stats/stats-transactions';
 import { Op } from 'sequelize';
 
 import { authorizeBudgetRead } from './authorize-budget-access';
+import { resolveBudgetWindow } from './utils/budget-window';
 import { buildDateFilter } from './utils/build-date-filter';
 
 /**
@@ -24,6 +25,7 @@ export const getCategoryBudgetTransactions = async ({
   budgetId,
   from = 0,
   limit = 50,
+  at,
 }: GetCategoryBudgetTransactionsParams) => {
   // Share-aware auth: recipient sees owner's transactions on the budget (per PRD
   // visibility decision), not a recipient-userId slice.
@@ -46,10 +48,8 @@ export const getCategoryBudgetTransactions = async ({
     return { transactions: [], total: 0 };
   }
 
-  const dateFilter = buildDateFilter({
-    startDate: budget.startDate,
-    endDate: budget.endDate,
-  });
+  const window = resolveBudgetWindow({ budget, at });
+  const dateFilter = buildDateFilter({ startDate: window.from, endDate: window.to });
 
   // Planned rows are owner-only: they count as spent for the owner, but a share
   // recipient must never see them.
@@ -60,7 +60,7 @@ export const getCategoryBudgetTransactions = async ({
     access: { creator: ownerUserId },
     planned,
     refunds: 'ignore',
-    window: { from: budget.startDate ?? undefined, to: budget.endDate ?? undefined },
+    window: { from: window.from ?? undefined, to: window.to ?? undefined },
     where: { categoryId: { [Op.in]: categoryIds } },
     include: [
       { model: TransactionSplits, as: 'splits', required: false },
@@ -195,4 +195,6 @@ interface GetCategoryBudgetTransactionsParams {
   budgetId: string;
   from?: number;
   limit?: number;
+  /** Recurring budgets list the period containing this instant (default now). */
+  at?: Date;
 }

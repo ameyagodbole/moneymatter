@@ -4,6 +4,7 @@ import deleteBudget from '@controllers/budgets/delete-budgets';
 import editBudget from '@controllers/budgets/edit-budget';
 import { getBudgetById, getBudgets } from '@controllers/budgets/get-budgets';
 import getCategoryBudgetTransactions from '@controllers/budgets/get-category-budget-transactions';
+import getPeriods from '@controllers/budgets/get-periods';
 import getSpendingStats from '@controllers/budgets/get-spending-stats';
 import getStats from '@controllers/budgets/get-stats';
 import removeTransactionsFromBudget from '@controllers/budgets/remove-transaction-from-budget';
@@ -25,6 +26,7 @@ router.get(
   validateEndpoint(getSpendingStats.schema),
   getSpendingStats.handler,
 );
+router.get('/:id/periods', authenticateSession, validateEndpoint(getPeriods.schema), getPeriods.handler);
 router.get(
   '/:id/category-transactions',
   authenticateSession,

@@ -5,7 +5,7 @@
  * Money fields auto-convert via .toNumber().
  * Deserializers convert API decimal inputs to Money.
  */
-import { BUDGET_TYPES, ResourceShareInfo } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_TYPES, ResourceShareInfo } from '@bt/shared/types';
 import { Money, centsToApiDecimal, centsToApiDecimalOrNull } from '@common/types/money';
 import type Budgets from '@models/budget.model';
 import type { BudgetShareContext } from '@services/sharing/get-shared-budgets.service';
@@ -27,6 +27,8 @@ interface BudgetApiResponse {
   name: string;
   status: string;
   type: BUDGET_TYPES;
+  recurrence: BUDGET_RECURRENCES;
+  timezone: string | null;
   startDate: Date | null;
   endDate: Date | null;
   autoInclude: boolean;
@@ -57,6 +59,8 @@ export function serializeBudget(budget: Budgets & { _shareContext?: BudgetShareC
     name: budget.name,
     status: budget.status,
     type: budget.type,
+    recurrence: budget.recurrence,
+    timezone: budget.timezone,
     startDate: budget.startDate,
     endDate: budget.endDate,
     autoInclude: budget.autoInclude,
@@ -90,7 +94,15 @@ export function serializeBudgets(
 // Budget Stats Serializer
 // ============================================================================
 
+interface BudgetStatsPeriod {
+  index: number;
+  start: Date;
+  end: Date;
+}
+
 interface BudgetStatsApiResponse {
+  /** The period the totals cover, or null for one-off budgets. */
+  period: BudgetStatsPeriod | null;
   summary: {
     actualIncome: number;
     actualExpense: number;
@@ -103,6 +115,7 @@ interface BudgetStatsApiResponse {
 }
 
 interface BudgetStatsInternal {
+  period: BudgetStatsPeriod | null;
   summary: {
     actualIncome: number | Money;
     actualExpense: number | Money;
@@ -119,6 +132,7 @@ interface BudgetStatsInternal {
  */
 export function serializeBudgetStats(stats: BudgetStatsInternal): BudgetStatsApiResponse {
   return {
+    period: stats.period,
     summary: {
       actualIncome: centsToApiDecimal(stats.summary.actualIncome),
       actualExpense: centsToApiDecimal(stats.summary.actualExpense),
@@ -179,6 +193,57 @@ export function serializeBudgetSpendingStats(stats: SpendingStatsInternal) {
         expense: centsToApiDecimal(period.expense),
         income: centsToApiDecimal(period.income),
       })),
+    },
+  };
+}
+
+// ============================================================================
+// Budget Periods Serializer
+// ============================================================================
+
+interface BudgetPeriodsInternal {
+  recurrence: string;
+  periods: {
+    index: number;
+    periodStart: Date;
+    periodEnd: Date;
+    expense: number; // cents
+    income: number; // cents
+    spent: number; // cents
+    limitAmount: number | null; // cents
+    utilizationRate: number | null;
+  }[];
+  cumulative: {
+    granularity: string;
+    current: { step: number; stepStart: Date; value: number; periodValue: number }[];
+    previous: { step: number; stepStart: Date; value: number; periodValue: number }[];
+  };
+}
+
+const serializeCumulativeStep = (step: BudgetPeriodsInternal['cumulative']['current'][number]) => ({
+  step: step.step,
+  stepStart: step.stepStart.toISOString(),
+  value: centsToApiDecimal(step.value),
+  periodValue: centsToApiDecimal(step.periodValue),
+});
+
+export function serializeBudgetPeriods(data: BudgetPeriodsInternal) {
+  return {
+    recurrence: data.recurrence,
+    periods: data.periods.map((period) => ({
+      index: period.index,
+      periodStart: period.periodStart.toISOString(),
+      periodEnd: period.periodEnd.toISOString(),
+      expense: centsToApiDecimal(period.expense),
+      income: centsToApiDecimal(period.income),
+      spent: centsToApiDecimal(period.spent),
+      limitAmount: centsToApiDecimalOrNull(period.limitAmount),
+      utilizationRate: period.utilizationRate,
+    })),
+    cumulative: {
+      granularity: data.cumulative.granularity,
+      current: data.cumulative.current.map(serializeCumulativeStep),
+      previous: data.cumulative.previous.map(serializeCumulativeStep),
     },
   };
 }

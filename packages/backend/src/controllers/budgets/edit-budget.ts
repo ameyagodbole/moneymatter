@@ -1,8 +1,11 @@
+import { BUDGET_RECURRENCES } from '@bt/shared/types';
 import { dateBound, decimalMoney, recordId, recordArrayIds, withDateOrder } from '@common/lib/zod/custom-types';
 import { createController } from '@controllers/helpers/controller-factory';
 import { serializeBudget } from '@root/serializers';
 import * as editBudgetService from '@services/budgets/edit-budget';
 import { z } from 'zod';
+
+import { budgetTimezone } from './budget-timezone';
 
 const schema = z.object({
   params: z.object({
@@ -12,8 +15,11 @@ const schema = z.object({
     z.object({
       name: z.string().min(1, 'Name is required').max(200, 'Name must not exceed 200 characters').trim().optional(),
       categoryIds: recordArrayIds().optional(),
+      recurrence: z.nativeEnum(BUDGET_RECURRENCES).optional(),
+      timezone: budgetTimezone().nullable().optional(),
       startDate: dateBound({ precision: 'datetime' }).optional(),
-      endDate: dateBound({ precision: 'datetime' }).optional(),
+      // `null` clears the end date (a recurring budget then repeats until archived).
+      endDate: dateBound({ precision: 'datetime' }).nullable().optional(),
       autoInclude: z.boolean().optional().default(false),
       limitAmount: decimalMoney()
         .refine((m) => m.isPositive(), { message: 'Limit amount must be positive' })
@@ -24,13 +30,15 @@ const schema = z.object({
 });
 
 export default createController(schema, async ({ user, params, body }) => {
-  const { name, categoryIds, startDate, endDate, limitAmount, autoInclude } = body;
+  const { name, categoryIds, recurrence, timezone, startDate, endDate, limitAmount, autoInclude } = body;
 
   const budget = await editBudgetService.editBudget({
     id: params.id,
     userId: user.id,
     name,
     categoryIds,
+    recurrence,
+    timezone,
     startDate,
     endDate,
     limitAmount,

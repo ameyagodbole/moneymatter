@@ -21,6 +21,7 @@ import { ApiErrorResponseError } from '@/js/errors';
 import { captureException } from '@/lib/sentry';
 import BudgetSharingPanel from '@/pages/budgets/components/budget-sharing-panel.vue';
 import { ROUTES_NAMES } from '@/routes/constants';
+import { BUDGET_RECURRENCES } from '@bt/shared/types';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { format, parseISO } from 'date-fns';
 import { cloneDeep } from 'lodash-es';
@@ -50,6 +51,8 @@ import BudgetStatsCards from './shared/budget-stats-cards.vue';
 import BudgetUtilizationBar from './shared/budget-utilization-bar.vue';
 import { useArchiveToggle } from './shared/use-archive-toggle';
 import { useBudgetDetails } from './shared/use-budget-details';
+import BudgetPeriodStepper from './recurring/budget-period-stepper.vue';
+import RecurringBudgetOverview from './recurring/recurring-budget-overview.vue';
 import BudgetStatistics from './statistics/budget-statistics.vue';
 
 const route = useRoute();
@@ -63,16 +66,23 @@ const currentBudgetId = ref<string>(route.params.id as string);
 const isEditDialogOpen = ref(false);
 const isCategoriesExpanded = ref(false);
 
-const { data: budgetStats } = useQuery({
-  queryFn: () => loadBudgetStats({ budgetId: currentBudgetId.value }),
-  queryKey: [...VUE_QUERY_CACHE_KEYS.budgetStats, currentBudgetId],
-  staleTime: 30_000,
-});
-
 const { data: budgetItem } = useQuery({
   queryFn: () => loadBudgetById(currentBudgetId.value),
   queryKey: [VUE_QUERY_CACHE_KEYS.budgetsListItem, currentBudgetId.value],
   staleTime: Infinity,
+});
+
+// Recurring budgets show one period at a time; undefined follows the current period.
+const selectedAt = ref<Date | undefined>();
+const atKey = computed(() => selectedAt.value?.toISOString() ?? 'current');
+const isRecurring = computed(() => !!budgetItem.value && budgetItem.value.recurrence !== BUDGET_RECURRENCES.none);
+const recurrence = computed(() => budgetItem.value?.recurrence as Exclude<BUDGET_RECURRENCES, BUDGET_RECURRENCES.none>);
+
+const { data: budgetStats } = useQuery({
+  queryFn: () => loadBudgetStats({ budgetId: currentBudgetId.value, at: selectedAt.value }),
+  queryKey: [...VUE_QUERY_CACHE_KEYS.budgetStats, currentBudgetId, atKey],
+  staleTime: 30_000,
+  placeholderData: (previous) => previous,
 });
 
 const { stats, transactionDateRange, getBudgetTimeStatus, utilizationColor, utilizationTextColor } = useBudgetDetails({
@@ -101,8 +111,9 @@ const {
       budgetId: currentBudgetId.value,
       from: pageParam,
       limit: TRANSACTIONS_PAGE_SIZE,
+      at: selectedAt.value,
     }),
-  queryKey: [...VUE_QUERY_CACHE_KEYS.budgetCategoryTransactions, currentBudgetId],
+  queryKey: [...VUE_QUERY_CACHE_KEYS.budgetCategoryTransactions, currentBudgetId, atKey],
   initialPageParam: 0,
   getNextPageParam: (lastPage, pages) => {
     const loaded = pages.reduce((count, page) => count + page.transactions.length, 0);
@@ -123,6 +134,9 @@ const { mutateAsync, isPending: isBudgetDataUpdating } = useMutation({
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.budgetsList });
     queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.budgetStats });
+    queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.budgetPeriods });
+    queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.budgetSpendingStats });
+    queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.budgetCategoryTransactions });
     queryClient.invalidateQueries({ queryKey: [VUE_QUERY_CACHE_KEYS.budgetsListItem, currentBudgetId.value] });
   },
 });
@@ -373,6 +387,15 @@ const totalBreakdownAmount = computed(() => categoryBreakdown.value.reduce((sum,
       </p>
     </Card>
 
+    <BudgetPeriodStepper
+      v-if="isRecurring"
+      :period="budgetStats?.period ?? null"
+      :recurrence="recurrence"
+      :series-end="budgetItem?.endDate"
+      :is-pinned="selectedAt !== undefined"
+      @update:at="selectedAt = $event"
+    />
+
     <BudgetStatsCards :stats="stats" />
 
     <BudgetUtilizationBar
@@ -386,7 +409,15 @@ const totalBreakdownAmount = computed(() => categoryBreakdown.value.reduce((sum,
     <PillTabs v-model="activeTab" :items="tabItems" class="mb-6" />
 
     <!-- Statistics Tab -->
-    <BudgetStatistics v-if="activeTab === 'statistics'" :budget-id="currentBudgetId" />
+    <template v-if="activeTab === 'statistics'">
+      <RecurringBudgetOverview
+        v-if="isRecurring"
+        :budget-id="currentBudgetId"
+        :at="selectedAt"
+        @update:at="selectedAt = $event"
+      />
+      <BudgetStatistics v-else :budget-id="currentBudgetId" />
+    </template>
 
     <!-- Transactions Tab -->
     <template v-else-if="activeTab === 'transactions'">

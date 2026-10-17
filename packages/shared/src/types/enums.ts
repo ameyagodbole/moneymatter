@@ -242,6 +242,14 @@ export enum BUDGET_TYPES {
   category = 'category',
 }
 
+/** How often a budget resets. `none` is a one-off budget over its own date range. */
+export enum BUDGET_RECURRENCES {
+  none = 'none',
+  monthly = 'monthly',
+  quarterly = 'quarterly',
+  yearly = 'yearly',
+}
+
 /**
  * Tag reminder trigger types
  */

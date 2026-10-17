@@ -1,11 +1,19 @@
 import { api } from '@/api/_api';
-import { BudgetModel, endpointsTypes } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BudgetModel, endpointsTypes } from '@bt/shared/types';
 
 interface editBudgetParamsParams {
   name?: string;
   limitAmount?: number;
   categoryIds?: string[];
+  recurrence?: BUDGET_RECURRENCES;
+  timezone?: string | null;
+  startDate?: string;
+  /** `null` clears the end date, so a recurring budget repeats until archived. */
+  endDate?: string | null;
 }
+
+/** `at` query for recurring budgets: the instant whose period to read. Omitted means now. */
+const atQuery = (at: Date | undefined) => (at ? { at: at.toISOString() } : {});
 
 export const loadSystemBudgets = async ({ status }: { status?: string } = {}): Promise<BudgetModel[]> => {
   return api.get('/budgets', status ? { status } : undefined);
@@ -43,7 +51,17 @@ export const removeTransactionsFromBudget = async ({
   payload: { transactionIds: string[] };
 }) => api.delete(`/budgets/${budgetId}/transactions`, { data: payload });
 
+export interface BudgetPeriod {
+  index: number;
+  /** ISO instant */
+  start: string;
+  /** ISO instant, last millisecond of the period */
+  end: string;
+}
+
 export interface StatsResponse {
+  /** The period the totals cover, or null for one-off budgets. */
+  period: BudgetPeriod | null;
   summary: {
     actualIncome: number;
     actualExpense: number;
@@ -55,8 +73,54 @@ export interface StatsResponse {
   };
 }
 
-export const loadBudgetStats = async ({ budgetId }: { budgetId: string }): Promise<StatsResponse> => {
-  return api.get(`/budgets/${budgetId}/stats`);
+export const loadBudgetStats = async ({ budgetId, at }: { budgetId: string; at?: Date }): Promise<StatsResponse> => {
+  return api.get(`/budgets/${budgetId}/stats`, atQuery(at));
+};
+
+export interface BudgetPeriodTotals {
+  index: number;
+  periodStart: string;
+  periodEnd: string;
+  expense: number;
+  income: number;
+  /** Net outflow, never below zero: what the limit is compared against. */
+  spent: number;
+  limitAmount: number | null;
+  utilizationRate: number | null;
+}
+
+export interface BudgetCumulativeStep {
+  /** 1-based position inside the period */
+  step: number;
+  stepStart: string;
+  /** Running net spending up to the end of this step */
+  value: number;
+  /** Net spending within this step alone */
+  periodValue: number;
+}
+
+export interface BudgetPeriodsResponse {
+  recurrence: Exclude<BUDGET_RECURRENCES, BUDGET_RECURRENCES.none>;
+  /** Oldest first, ending with the period containing `at` */
+  periods: BudgetPeriodTotals[];
+  cumulative: {
+    granularity: 'day' | 'week' | 'month';
+    current: BudgetCumulativeStep[];
+    /** Empty when the selected period is the first one */
+    previous: BudgetCumulativeStep[];
+  };
+}
+
+export const loadBudgetPeriods = async ({
+  budgetId,
+  at,
+  count,
+}: {
+  budgetId: string;
+  at?: Date;
+  count?: number;
+}): Promise<BudgetPeriodsResponse> => {
+  return api.get(`/budgets/${budgetId}/periods`, { ...atQuery(at), ...(count && { count }) });
 };
 
 export interface CategoryBudgetTransaction {
@@ -85,18 +149,22 @@ export const loadCategoryBudgetTransactions = async ({
   budgetId,
   from = 0,
   limit = 50,
+  at,
 }: {
   budgetId: string;
   from?: number;
   limit?: number;
+  at?: Date;
 }): Promise<CategoryBudgetTransactionsResponse> => {
-  return api.get(`/budgets/${budgetId}/category-transactions`, { from, limit });
+  return api.get(`/budgets/${budgetId}/category-transactions`, { from, limit, ...atQuery(at) });
 };
 
 export const loadBudgetSpendingStats = async ({
   budgetId,
+  at,
 }: {
   budgetId: string;
+  at?: Date;
 }): Promise<endpointsTypes.BudgetSpendingStatsResponse> => {
-  return api.get(`/budgets/${budgetId}/spending-stats`);
+  return api.get(`/budgets/${budgetId}/spending-stats`, atQuery(at));
 };

@@ -1,4 +1,5 @@
 import { type ParsedImportDate } from '@bt/shared/import-export/date-engine';
+import { zonedWallClockToInstant } from '@common/utils/zoned-time';
 
 interface AnchorImportDateParams {
   parsed: ParsedImportDate;
@@ -51,84 +52,4 @@ export function anchorImportDate({ parsed, timezone }: AnchorImportDateParams): 
     },
     timezone,
   });
-}
-
-interface WallClock {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-  ms: number;
-}
-
-/**
- * Converts wall-clock components, read as a local time in `timezone`, to the
- * absolute UTC instant. Falls back to interpreting them as UTC when `timezone`
- * is absent or invalid.
- */
-function zonedWallClockToInstant({ wall, timezone }: { wall: WallClock; timezone: string | undefined }): Date {
-  const utcGuessMs = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second, wall.ms);
-
-  if (!timezone) {
-    return new Date(utcGuessMs);
-  }
-
-  let offsetMs: number;
-  try {
-    // The offset is sampled at the guessed instant, then re-sampled at the
-    // corrected instant. The second pass settles offsets that shift around a
-    // DST boundary, where the first guess can land in the wrong side of the gap.
-    const firstOffset = timezoneOffsetMs({ instantMs: utcGuessMs, timezone });
-    offsetMs = timezoneOffsetMs({ instantMs: utcGuessMs - firstOffset, timezone });
-  } catch {
-    // Unknown IANA zone — treat the wall-clock components as UTC instead of
-    // crashing the whole import.
-    return new Date(utcGuessMs);
-  }
-
-  return new Date(utcGuessMs - offsetMs);
-}
-
-/**
- * The offset (in ms) of `timezone` from UTC at the given instant — positive east
- * of UTC. Computed by formatting the instant in the zone and diffing the
- * resulting wall-clock against the same instant read as UTC. Throws if
- * `timezone` is not a valid IANA zone.
- */
-function timezoneOffsetMs({ instantMs, timezone }: { instantMs: number; timezone: string }): number {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-
-  const parts = formatter.formatToParts(new Date(instantMs));
-  const lookup: Record<string, string> = {};
-  for (const part of parts) {
-    lookup[part.type] = part.value;
-  }
-
-  // Some runtimes emit "24" for midnight; normalise it to "00" so Date.UTC
-  // doesn't roll the day forward.
-  const hour = lookup.hour === '24' ? 0 : Number(lookup.hour);
-  const wallAsUtcMs = Date.UTC(
-    Number(lookup.year),
-    Number(lookup.month) - 1,
-    Number(lookup.day),
-    hour,
-    Number(lookup.minute),
-    Number(lookup.second),
-  );
-
-  // `instantMs` may carry sub-second precision the formatter drops; align both
-  // sides to whole seconds so the offset is a clean zone offset, not noise.
-  const instantWholeSecondMs = Math.floor(instantMs / 1000) * 1000;
-  return wallAsUtcMs - instantWholeSecondMs;
 }

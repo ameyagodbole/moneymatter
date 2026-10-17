@@ -7,6 +7,12 @@
     "backToList": "Повернутися до бюджетів",
     "newBudget": "Новий бюджет",
     "createBudget": "Створити бюджет",
+    "recurrence": {
+      "none": "Не повторюється",
+      "monthly": "Щомісяця",
+      "quarterly": "Щокварталу",
+      "yearly": "Щороку"
+    },
     "creation": {
       "success": "Бюджет створено",
       "error": "Неочікувана помилка!",
@@ -21,14 +27,26 @@
       "categoriesRequired": "Виберіть щонайменше одну категорію",
       "fromDateLabel": "Від дати",
       "toDateLabel": "До дати",
+      "recurrenceLabel": "Повторюється",
+      "recurrencePlaceholder": "Виберіть, як часто він скидається",
+      "recurrenceHint": {
+        "monthly": "Скидається щомісяця в день, що збігається з датою початку. Ліміт діє на кожен місяць.",
+        "quarterly": "Скидається кожні 3 місяці від дати початку. Ліміт діє на кожен квартал.",
+        "yearly": "Скидається щороку в дату початку. Ліміт діє на кожен рік."
+      },
+      "startsOnLabel": "Починається",
+      "endsOnLabel": "Закінчується (необов'язково)",
+      "limitPerPeriodLabel": {
+        "monthly": "Місячний ліміт",
+        "quarterly": "Квартальний ліміт",
+        "yearly": "Річний ліміт"
+      },
       "autoIncludeLabel": "Автоматично включати транзакції",
       "limitLabel": "Ліміт бюджету",
       "limitPlaceholder": "Введіть ліміт",
       "submitButton": "Додати бюджет"
     },
     "list": {
-      "tabCategory": "Бюджети за категоріями",
-      "tabManual": "Ручні бюджети",
       "edit": "Редагувати",
       "delete": "Видалити",
       "deleteSuccess": "Бюджет успішно видалено!",
@@ -41,6 +59,11 @@
         "description": "Натиснувши «Прийняти», усі пов'язані транзакції будуть відв'язані від бюджету, але залишаться в системі."
       },
       "limitLabel": "Ліміт: {amount}",
+      "limitPerPeriod": {
+        "monthly": "Ліміт: {amount} / місяць",
+        "quarterly": "Ліміт: {amount} / квартал",
+        "yearly": "Ліміт: {amount} / рік"
+      },
       "transactionsCount": "{count} транзакцій",
       "categoriesCount": "{count} категорій",
       "noTransactions": "Транзакцій ще немає",
@@ -69,6 +92,24 @@
         "title": "Бюджетів ще немає",
         "description": "Створіть бюджет, щоб почати відстежувати свої витрати або контролювати конкретні події."
       }
+    },
+    "recurring": {
+      "periodChart": {
+        "title": "Витрати за періодами",
+        "noData": "Періодів для показу ще немає"
+      },
+      "spent": "Витрачено",
+      "limit": "Ліміт",
+      "used": "Використано",
+      "overLimit": "Перевищено ліміт",
+      "loadError": "Не вдалося завантажити періоди цього бюджету",
+      "spentThisPeriod": "Витрачено за цей період",
+      "vsPreviousPeriod": "порівняно з попереднім періодом",
+      "previousPeriod": "Попередній період",
+      "limitUsed": "Використано ліміту",
+      "previousPeriodButton": "Попередній період",
+      "nextPeriodButton": "Наступний період",
+      "currentPeriodButton": "Повернутися до поточного періоду"
     },
     "settings": {
       "nameLabel": "Назва бюджету",

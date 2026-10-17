@@ -2,12 +2,13 @@
 import CategoryMultiSelectField from '@/components/fields/category-multi-select-field.vue';
 import InputField from '@/components/fields/input-field.vue';
 import Button from '@/components/lib/ui/button/Button.vue';
-import type { BudgetModel } from '@bt/shared/types';
-import { format } from 'date-fns';
-import { ref, watch } from 'vue';
+import { BUDGET_RECURRENCES, type BudgetModel } from '@bt/shared/types';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-import { type BudgetEditPayload, buildBudgetEditPayload } from './build-budget-edit-payload';
+import { getBrowserTimezone } from '../use-recurrence-options';
+import { type BudgetEditPayload, type BudgetSchedule, buildBudgetEditPayload } from './build-budget-edit-payload';
+import BudgetScheduleFields from './shared/budget-schedule-fields.vue';
 
 const props = defineProps<{
   budget: BudgetModel;
@@ -24,9 +25,9 @@ const formData = ref({
   name: '',
   limitAmount: null as number | null,
   categoryIds: [] as string[],
-  startDate: null as Date | null,
-  endDate: null as Date | null,
 });
+const schedule = ref<BudgetSchedule>({ recurrence: BUDGET_RECURRENCES.none, startDate: null, endDate: null });
+const isScheduleDirty = ref(false);
 
 // Initialize form data from budget prop on mount
 const initFormData = () => {
@@ -34,10 +35,24 @@ const initFormData = () => {
     name: props.budget.name,
     limitAmount: props.budget.limitAmount ?? null,
     categoryIds: props.budget.categories?.map((c) => c.id) ?? [],
+  };
+  schedule.value = {
+    recurrence: props.budget.recurrence,
     startDate: props.budget.startDate ? new Date(props.budget.startDate) : null,
     endDate: props.budget.endDate ? new Date(props.budget.endDate) : null,
   };
+  isScheduleDirty.value = false;
 };
+
+const onScheduleUpdate = (value: BudgetSchedule) => {
+  schedule.value = value;
+  isScheduleDirty.value = true;
+};
+
+// A recurring budget's start date anchors every period, so it can't be cleared.
+const isScheduleValid = computed(
+  () => schedule.value.recurrence === BUDGET_RECURRENCES.none || !!schedule.value.startDate,
+);
 
 // Reset form when budget changes (e.g., after successful save)
 watch(
@@ -48,11 +63,6 @@ watch(
   { immediate: true },
 );
 
-const formatDate = (date: Date | null) => {
-  if (!date) return null;
-  return format(date, 'MMM d, yyyy');
-};
-
 const handleSave = () => {
   emit(
     'save',
@@ -60,6 +70,8 @@ const handleSave = () => {
       name: formData.value.name,
       limitAmount: formData.value.limitAmount,
       categoryIds: formData.value.categoryIds,
+      // Only a changed schedule is sent, so saving a rename never moves the periods to this browser's zone.
+      ...(isScheduleDirty.value && { schedule: schedule.value, timezone: getBrowserTimezone() }),
     }),
   );
 };
@@ -76,7 +88,11 @@ const handleSave = () => {
     />
     <InputField
       v-model="formData.limitAmount"
-      :label="t('budgets.settings.limitLabel')"
+      :label="
+        schedule.recurrence === BUDGET_RECURRENCES.none
+          ? t('budgets.settings.limitLabel')
+          : t(`budgets.creation.limitPerPeriodLabel.${schedule.recurrence}`)
+      "
       :placeholder="t('budgets.settings.limitPlaceholder')"
       type="number"
       only-positive
@@ -88,30 +104,9 @@ const handleSave = () => {
       :label="t('budgets.categoryBudget.settings.categoriesLabel')"
       :disabled="isLoading"
     />
-    <div class="grid grid-cols-2 gap-3">
-      <div>
-        <label class="text-muted-foreground mb-1.5 block text-sm font-medium">
-          {{ t('budgets.settings.startDateLabel') }}
-        </label>
-        <div
-          class="border-input bg-muted/50 text-muted-foreground flex h-10 items-center rounded-md border px-3 text-sm"
-        >
-          {{ formatDate(formData.startDate) || t('pages.budgetDetails.notSet') }}
-        </div>
-      </div>
-      <div>
-        <label class="text-muted-foreground mb-1.5 block text-sm font-medium">
-          {{ t('budgets.settings.endDateLabel') }}
-        </label>
-        <div
-          class="border-input bg-muted/50 text-muted-foreground flex h-10 items-center rounded-md border px-3 text-sm"
-        >
-          {{ formatDate(formData.endDate) || t('pages.budgetDetails.notSet') }}
-        </div>
-      </div>
-    </div>
+    <BudgetScheduleFields :model-value="schedule" :disabled="isLoading" @update:model-value="onScheduleUpdate" />
     <div class="flex justify-end">
-      <Button @click="handleSave" :disabled="isLoading">
+      <Button @click="handleSave" :disabled="isLoading || !isScheduleValid">
         <template v-if="isLoading">{{ t('pages.budgetDetails.saving') }}</template>
         <template v-else>{{ t('pages.budgetDetails.saveChanges') }}</template>
       </Button>

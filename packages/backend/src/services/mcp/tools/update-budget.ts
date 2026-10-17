@@ -1,5 +1,7 @@
+import { BUDGET_RECURRENCES } from '@bt/shared/types';
 import { recordId } from '@common/lib/zod/custom-types';
 import { Money } from '@common/types/money';
+import { isValidTimezone } from '@common/utils/zoned-time';
 import { trackMcpToolUsed } from '@js/utils/posthog';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { editBudget } from '@services/budgets/edit-budget';
@@ -11,7 +13,27 @@ const inputSchema = {
   budgetId: recordId().describe('ID of the budget to update'),
   name: z.string().optional().describe('New budget name'),
   startDate: z.string().optional().describe('New start date (ISO 8601)'),
-  endDate: z.string().optional().describe('New end date (ISO 8601)'),
+  endDate: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('New end date (ISO 8601). Pass null to clear it so a recurring budget repeats until archived'),
+  recurrence: z
+    .enum([
+      BUDGET_RECURRENCES.none,
+      BUDGET_RECURRENCES.monthly,
+      BUDGET_RECURRENCES.quarterly,
+      BUDGET_RECURRENCES.yearly,
+    ])
+    .optional()
+    .describe(
+      'How often the budget resets. none is a one-off budget over its date range. For monthly/quarterly/yearly, startDate is required and its day anchors every period (e.g. the 25th → 25th–24th), limitAmount is per period, and endDate is optional (omit to repeat until archived).',
+    ),
+  timezone: z
+    .string()
+    .refine((timezone) => isValidTimezone({ timezone }), { message: 'Unknown IANA timezone' })
+    .optional()
+    .describe("IANA timezone the periods are cut in, e.g. 'Europe/Kyiv'. Default: UTC"),
   limitAmount: z
     .number()
     .optional()
@@ -28,7 +50,7 @@ export function registerUpdateBudget(server: McpServer) {
     'update_budget',
     {
       description:
-        "Update an existing budget's name, date range, spending limit, or linked categories. Returns the updated budget record.",
+        "Update an existing budget's name, date range, recurrence, spending limit, or linked categories. Returns the updated budget record.",
       inputSchema,
     },
     async (args, extra) => {
@@ -40,6 +62,8 @@ export function registerUpdateBudget(server: McpServer) {
         id: args.budgetId,
         userId,
         name: args.name,
+        recurrence: args.recurrence,
+        timezone: args.timezone,
         startDate: args.startDate,
         endDate: args.endDate,
         limitAmount: args.limitAmount !== undefined ? Money.fromDecimal(args.limitAmount) : undefined,

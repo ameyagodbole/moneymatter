@@ -2,21 +2,18 @@
 import { deleteBudget as deleteBudgetApi, loadBudgetStats } from '@/api';
 import { archiveBudget as archiveBudgetApi, loadSystemBudgets } from '@/api/budgets';
 import { VUE_QUERY_CACHE_KEYS } from '@/common/const';
-import PillTabs from '@/components/lib/ui/pill-tabs/pill-tabs.vue';
 import { useNotificationCenter } from '@/components/notification-center';
 import { ROUTES_NAMES } from '@/routes';
-import { BUDGET_STATUSES, BUDGET_TYPES, BudgetModel } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_STATUSES, BudgetModel } from '@bt/shared/types';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/vue-query';
-import { useLocalStorage } from '@vueuse/core';
-import { differenceInDays, isPast, isWithinInterval } from 'date-fns';
-import { ArchiveRestoreIcon, TagsIcon, WalletIcon } from '@lucide/vue';
+import { ArchiveRestoreIcon, WalletIcon } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 
 import BudgetCardSkeleton from './budget-card-skeleton.vue';
-import CategoryBudgetCard from './budget-list-cards/category-budget-card.vue';
-import ManualBudgetCard from './budget-list-cards/manual-budget-card.vue';
+import BudgetCard from './budget-list-cards/budget-card.vue';
+import { formatBudgetTimeStatus, getBudgetTimeStatus } from './budget-time-status';
 
 const { t } = useI18n();
 const { addErrorNotification, addSuccessNotification } = useNotificationCenter();
@@ -98,50 +95,19 @@ const handleArchive = ({ budgetId, isArchived }: { budgetId: string; isArchived:
   archiveBudget({ budgetId, isArchived });
 };
 
-const getBudgetTimeStatus = (budget: BudgetModel) => {
-  if (!budget.startDate && !budget.endDate) return null;
-
-  const now = new Date();
-  const startDate = budget.startDate ? new Date(budget.startDate) : null;
-  const endDate = budget.endDate ? new Date(budget.endDate) : null;
-
-  if (endDate && isPast(endDate)) {
-    return { status: 'ended' as const, text: t('budgets.list.status.ended') };
-  }
-
-  if (startDate && endDate && isWithinInterval(now, { start: startDate, end: endDate })) {
-    const daysLeft = differenceInDays(endDate, now);
-    if (daysLeft === 0) return { status: 'active' as const, text: t('budgets.list.status.lastDay') };
-    if (daysLeft === 1) return { status: 'active' as const, text: t('budgets.list.status.oneDayLeft') };
-    return { status: 'active' as const, text: t('budgets.list.status.daysLeft', { count: daysLeft }) };
-  }
-
-  if (startDate && !isPast(startDate)) {
-    const daysUntil = differenceInDays(startDate, now);
-    if (daysUntil === 0) return { status: 'upcoming' as const, text: t('budgets.list.status.startsToday') };
-    if (daysUntil === 1) return { status: 'upcoming' as const, text: t('budgets.list.status.startsTomorrow') };
-    return { status: 'upcoming' as const, text: t('budgets.list.status.startsInDays', { count: daysUntil }) };
-  }
-
-  if (endDate && !isPast(endDate)) {
-    const daysLeft = differenceInDays(endDate, now);
-    if (daysLeft === 0) return { status: 'active' as const, text: t('budgets.list.status.lastDay') };
-    if (daysLeft === 1) return { status: 'active' as const, text: t('budgets.list.status.oneDayLeft') };
-    return { status: 'active' as const, text: t('budgets.list.status.daysLeft', { count: daysLeft }) };
-  }
-
-  return null;
+const getTimeStatus = (budget: BudgetModel) => {
+  const status = getBudgetTimeStatus({ budget, period: getBudgetStats(budget.id)?.period });
+  return status ? { status: status.status, text: formatBudgetTimeStatus({ status, t }) } : null;
 };
-
-const activeTab = useLocalStorage<BUDGET_TYPES>('budgets-active-tab', BUDGET_TYPES.category);
 
 const isArchived = (budget: BudgetModel) => budget.status === BUDGET_STATUSES.archived;
 
 // Sort priority: active/upcoming (0) > no dates (1) > ended (2) > archived (3)
 const getBudgetSortPriority = (budget: BudgetModel): number => {
   if (isArchived(budget)) return 3;
-  const status = getBudgetTimeStatus(budget);
-  if (!status) return 1; // No dates set
+  const status = getTimeStatus(budget);
+  // A recurring budget is current until its series ends, even before its stats arrive.
+  if (!status) return budget.recurrence === BUDGET_RECURRENCES.none ? 1 : 0; // No dates set
   if (status.status === 'ended') return 2;
   return 0; // active or upcoming
 };
@@ -150,28 +116,7 @@ const sortBudgetsByStatus = (budgets: BudgetModel[]): BudgetModel[] => {
   return [...budgets].sort((a, b) => getBudgetSortPriority(a) - getBudgetSortPriority(b));
 };
 
-const categoryBudgets = computed(() =>
-  sortBudgetsByStatus((budgetsList.value || []).filter((b: BudgetModel) => b.type === BUDGET_TYPES.category)),
-);
-
-const manualBudgets = computed(() =>
-  sortBudgetsByStatus((budgetsList.value || []).filter((b: BudgetModel) => b.type === BUDGET_TYPES.manual)),
-);
-
-const tabItems = computed(() => [
-  {
-    value: BUDGET_TYPES.category,
-    label: categoryBudgets.value.length
-      ? `${t('budgets.list.tabCategory')}  (${categoryBudgets.value.length})`
-      : t('budgets.list.tabCategory'),
-  },
-  {
-    value: BUDGET_TYPES.manual,
-    label: manualBudgets.value.length
-      ? `${t('budgets.list.tabManual')}  (${manualBudgets.value.length})`
-      : t('budgets.list.tabManual'),
-  },
-]);
+const sortedBudgets = computed(() => sortBudgetsByStatus(budgetsList.value || []));
 </script>
 
 <template>
@@ -180,9 +125,7 @@ const tabItems = computed(() => [
     <BudgetCardSkeleton v-if="isInitialLoading" />
 
     <template v-else>
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <PillTabs v-model="activeTab" :items="tabItems" />
-
+      <div class="mb-4 flex items-center justify-end">
         <button
           type="button"
           class="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 text-xs transition-colors"
@@ -193,68 +136,33 @@ const tabItems = computed(() => [
         </button>
       </div>
 
-      <!-- Category Budgets Tab -->
-      <div v-if="activeTab === BUDGET_TYPES.category">
-        <div
-          v-if="categoryBudgets.length === 0 && !isLoadingMore"
-          class="flex flex-col items-center justify-center py-12 text-center"
-        >
-          <div class="bg-muted mb-4 flex size-16 items-center justify-center rounded-full">
-            <TagsIcon class="text-muted-foreground size-8" />
-          </div>
-          <h3 class="mb-1 font-medium">{{ $t('budgets.list.emptyState.title') }}</h3>
-          <p class="text-muted-foreground max-w-sm text-sm">
-            {{ $t('budgets.list.emptyState.description') }}
-          </p>
+      <div
+        v-if="sortedBudgets.length === 0 && !isLoadingMore"
+        class="flex flex-col items-center justify-center py-12 text-center"
+      >
+        <div class="bg-muted mb-4 flex size-16 items-center justify-center rounded-full">
+          <WalletIcon class="text-muted-foreground size-8" />
         </div>
-        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
-          <CategoryBudgetCard
-            v-for="budget in categoryBudgets"
-            :key="budget.id"
-            :budget="budget"
-            :is-archived="isArchived(budget)"
-            :stats="(getBudgetStats(budget.id)?.summary as any) ?? null"
-            :is-stats-loading="isBudgetStatsLoading(budget.id)"
-            :time-status="getBudgetTimeStatus(budget)"
-            @click="navigateToBudget({ budgetId: budget.id })"
-            @edit="navigateToBudget({ budgetId: budget.id })"
-            @delete="deleteBudget({ budgetId: budget.id })"
-            @archive="handleArchive({ budgetId: budget.id, isArchived: !isArchived(budget) })"
-          />
-          <BudgetCardSkeleton v-if="isLoadingMore" :count="2" inline />
-        </div>
+        <h3 class="mb-1 font-medium">{{ $t('budgets.list.emptyState.title') }}</h3>
+        <p class="text-muted-foreground max-w-sm text-sm">
+          {{ $t('budgets.list.emptyState.description') }}
+        </p>
       </div>
-
-      <!-- Manual Budgets Tab -->
-      <div v-if="activeTab === BUDGET_TYPES.manual">
-        <div
-          v-if="manualBudgets.length === 0 && !isLoadingMore"
-          class="flex flex-col items-center justify-center py-12 text-center"
-        >
-          <div class="bg-muted mb-4 flex size-16 items-center justify-center rounded-full">
-            <WalletIcon class="text-muted-foreground size-8" />
-          </div>
-          <h3 class="mb-1 font-medium">{{ $t('budgets.list.emptyState.title') }}</h3>
-          <p class="text-muted-foreground max-w-sm text-sm">
-            {{ $t('budgets.list.emptyState.description') }}
-          </p>
-        </div>
-        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
-          <ManualBudgetCard
-            v-for="budget in manualBudgets"
-            :key="budget.id"
-            :budget="budget"
-            :is-archived="isArchived(budget)"
-            :stats="(getBudgetStats(budget.id)?.summary as any) ?? null"
-            :is-stats-loading="isBudgetStatsLoading(budget.id)"
-            :time-status="getBudgetTimeStatus(budget)"
-            @click="navigateToBudget({ budgetId: budget.id })"
-            @edit="navigateToBudget({ budgetId: budget.id })"
-            @delete="deleteBudget({ budgetId: budget.id })"
-            @archive="handleArchive({ budgetId: budget.id, isArchived: !isArchived(budget) })"
-          />
-          <BudgetCardSkeleton v-if="isLoadingMore" :count="2" inline />
-        </div>
+      <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+        <BudgetCard
+          v-for="budget in sortedBudgets"
+          :key="budget.id"
+          :budget="budget"
+          :is-archived="isArchived(budget)"
+          :stats="getBudgetStats(budget.id)"
+          :is-stats-loading="isBudgetStatsLoading(budget.id)"
+          :time-status="getTimeStatus(budget)"
+          @click="navigateToBudget({ budgetId: budget.id })"
+          @edit="navigateToBudget({ budgetId: budget.id })"
+          @delete="deleteBudget({ budgetId: budget.id })"
+          @archive="handleArchive({ budgetId: budget.id, isArchived: !isArchived(budget) })"
+        />
+        <BudgetCardSkeleton v-if="isLoadingMore" :count="2" inline />
       </div>
     </template>
   </div>

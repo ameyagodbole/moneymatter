@@ -5,6 +5,7 @@ import {
   ACCOUNT_TYPES,
   AccessSource,
   BANK_PROVIDER_TYPE,
+  BUDGET_RECURRENCES,
   BUDGET_TYPES,
   CATEGORIZATION_MODE,
   LogoResolutionState,
@@ -406,7 +407,13 @@ export interface BudgetModel {
   status: string;
   name: string;
   type: BUDGET_TYPES;
+  /** `none` for a one-off budget. Recurring budgets reset every period; `limitAmount` is per period. */
+  recurrence: BUDGET_RECURRENCES;
+  /** IANA zone the periods are cut in. Null means UTC. */
+  timezone?: string | null;
+  /** For recurring budgets, the start of the first period. Its calendar day anchors every later period. */
   startDate?: Date;
+  /** For recurring budgets, the end of the last period, or unset when the budget repeats until archived. */
   endDate?: Date;
   limitAmount?: number;
   autoInclude?: boolean;

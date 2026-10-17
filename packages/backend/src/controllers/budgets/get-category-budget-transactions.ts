@@ -1,4 +1,4 @@
-import { recordId } from '@common/lib/zod/custom-types';
+import { dateBound, recordId } from '@common/lib/zod/custom-types';
 import { createController } from '@controllers/helpers/controller-factory';
 import * as getCategoryBudgetTransactionsService from '@services/budgets/get-category-budget-transactions';
 import { z } from 'zod';
@@ -10,6 +10,8 @@ const schema = z.object({
   query: z.object({
     from: z.coerce.number().int().min(0).default(0),
     limit: z.coerce.number().int().min(1).max(100).default(50),
+    // Recurring budgets list the period containing this instant (default now).
+    at: dateBound({ precision: 'datetime' }).optional(),
   }),
 });
 
@@ -19,6 +21,7 @@ export default createController(schema, async ({ user, params, query }) => {
     budgetId: params.id,
     from: query.from,
     limit: query.limit,
+    at: query.at ? new Date(query.at) : undefined,
   });
 
   return { data: result };

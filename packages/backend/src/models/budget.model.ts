@@ -1,4 +1,4 @@
-import { BUDGET_STATUSES, BUDGET_TYPES, RecordId } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_STATUSES, BUDGET_TYPES, RecordId } from '@bt/shared/types';
 import { IdColumn } from '@common/types/id-column';
 import { Money } from '@common/types/money';
 import { MoneyField } from '@common/types/money-column';
@@ -29,6 +29,13 @@ export default class Budgets extends Model {
     type: DataType.ENUM(...Object.values(BUDGET_TYPES)),
   })
   type!: BUDGET_TYPES;
+
+  @Column({ allowNull: false, defaultValue: BUDGET_RECURRENCES.none, type: DataType.STRING(20) })
+  recurrence!: BUDGET_RECURRENCES;
+
+  /** IANA zone the periods are cut in. Null means UTC. */
+  @Column({ allowNull: true, type: DataType.STRING(64) })
+  timezone!: string | null;
 
   @Column({ type: DataType.DATE, allowNull: true })
   startDate!: Date;

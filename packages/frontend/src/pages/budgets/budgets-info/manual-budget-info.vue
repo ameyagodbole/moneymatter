@@ -13,6 +13,7 @@ import { useBudgetAccess } from '@/composable/use-budget-access';
 import { captureException } from '@/lib/sentry';
 import BudgetSharingPanel from '@/pages/budgets/components/budget-sharing-panel.vue';
 import { ROUTES_NAMES } from '@/routes/constants';
+import { BUDGET_RECURRENCES } from '@bt/shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { cloneDeep } from 'lodash-es';
 import {
@@ -25,15 +26,20 @@ import {
   UsersIcon,
   WalletIcon,
 } from '@lucide/vue';
-import { computed, ref, toRef, watchEffect } from 'vue';
+import { computed, ref, toRef, watch, watchEffect } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
+import { getBrowserTimezone } from '../use-recurrence-options';
+import { type BudgetSchedule, buildBudgetEditPayload } from './build-budget-edit-payload';
 import BudgetDetailSkeleton from './budget-detail-skeleton.vue';
+import BudgetScheduleFields from './shared/budget-schedule-fields.vue';
 import BudgetStatsCards from './shared/budget-stats-cards.vue';
 import BudgetUtilizationBar from './shared/budget-utilization-bar.vue';
 import { useArchiveToggle } from './shared/use-archive-toggle';
 import { useBudgetDetails } from './shared/use-budget-details';
+import BudgetPeriodStepper from './recurring/budget-period-stepper.vue';
+import RecurringBudgetOverview from './recurring/recurring-budget-overview.vue';
 import BudgetStatistics from './statistics/budget-statistics.vue';
 import TransactionsList from './transactions-list.vue';
 
@@ -46,20 +52,29 @@ const budgetData = ref();
 const currentBudgetId = ref<string>(route.params.id as string);
 const isEditDialogOpen = ref(false);
 
-const { data: budgetStats } = useQuery({
-  queryFn: () => loadBudgetStats({ budgetId: currentBudgetId.value }),
-  queryKey: [...VUE_QUERY_CACHE_KEYS.budgetStats, currentBudgetId],
-  staleTime: 30_000,
-});
-
 const { data: budgetItem, isLoading } = useQuery({
   queryFn: () => loadBudgetById(currentBudgetId.value),
   queryKey: [VUE_QUERY_CACHE_KEYS.budgetsListItem, currentBudgetId.value],
   staleTime: Infinity,
 });
 
-const { stats, formatDate, transactionDateRange, getBudgetTimeStatus, utilizationColor, utilizationTextColor } =
-  useBudgetDetails({ budgetStats, budgetData });
+// Recurring budgets show one period at a time; undefined follows the current period.
+const selectedAt = ref<Date | undefined>();
+const atKey = computed(() => selectedAt.value?.toISOString() ?? 'current');
+const isRecurring = computed(() => !!budgetItem.value && budgetItem.value.recurrence !== BUDGET_RECURRENCES.none);
+const recurrence = computed(() => budgetItem.value?.recurrence as Exclude<BUDGET_RECURRENCES, BUDGET_RECURRENCES.none>);
+
+const { data: budgetStats } = useQuery({
+  queryFn: () => loadBudgetStats({ budgetId: currentBudgetId.value, at: selectedAt.value }),
+  queryKey: [...VUE_QUERY_CACHE_KEYS.budgetStats, currentBudgetId, atKey],
+  staleTime: 30_000,
+  placeholderData: (previous) => previous,
+});
+
+const { stats, transactionDateRange, getBudgetTimeStatus, utilizationColor, utilizationTextColor } = useBudgetDetails({
+  budgetStats,
+  budgetData,
+});
 
 // Share-derived auth on this budget. `canManage` gates the Edit/Archive/Sharing panel;
 // `isOwner` gates Delete. Recipients on `read`/`write` see neither set of buttons.
@@ -73,17 +88,48 @@ const { mutateAsync: editBudgetAsync, isPending: isBudgetDataUpdating } = useMut
       queryKey: [VUE_QUERY_CACHE_KEYS.budgetsListItem, currentBudgetId.value],
     });
     queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.budgetStats });
+    queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.budgetPeriods });
+    queryClient.invalidateQueries({ queryKey: VUE_QUERY_CACHE_KEYS.budgetSpendingStats });
   },
+});
+
+const schedule = ref<BudgetSchedule>({ recurrence: BUDGET_RECURRENCES.none, startDate: null, endDate: null });
+const isScheduleDirty = ref(false);
+
+const resetSchedule = () => {
+  const item = budgetItem.value;
+  schedule.value = {
+    recurrence: item?.recurrence ?? BUDGET_RECURRENCES.none,
+    startDate: item?.startDate ? new Date(item.startDate) : null,
+    endDate: item?.endDate ? new Date(item.endDate) : null,
+  };
+  isScheduleDirty.value = false;
+};
+
+const onScheduleUpdate = (value: BudgetSchedule) => {
+  schedule.value = value;
+  isScheduleDirty.value = true;
+};
+
+// A recurring budget's start date anchors every period, so it can't be cleared.
+const isScheduleValid = computed(
+  () => schedule.value.recurrence === BUDGET_RECURRENCES.none || !!schedule.value.startDate,
+);
+
+watch(isEditDialogOpen, (open) => {
+  if (open) resetSchedule();
 });
 
 const handleSaveFromDialog = async () => {
   try {
     await editBudgetAsync({
       budgetId: currentBudgetId.value,
-      payload: {
+      payload: buildBudgetEditPayload({
         name: budgetData.value.name,
-        limitAmount: budgetData.value.limitAmount,
-      },
+        limitAmount: budgetData.value.limitAmount === '' ? null : Number(budgetData.value.limitAmount),
+        // Only a changed schedule is sent, so saving a rename never moves the periods to this browser's zone.
+        ...(isScheduleDirty.value && { schedule: schedule.value, timezone: getBrowserTimezone() }),
+      }),
     });
     addSuccessNotification(t('budgets.list.updateSuccess'));
     isEditDialogOpen.value = false;
@@ -218,29 +264,12 @@ watchEffect(() => {
                 class="w-full"
                 :disabled="isBudgetDataUpdating"
               />
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <span class="text-muted-foreground mb-1.5 block text-sm font-medium">
-                    {{ $t('budgets.settings.startDateLabel') }}
-                  </span>
-                  <div
-                    class="border-input bg-muted/50 text-muted-foreground flex h-10 items-center rounded-md border px-3 text-sm"
-                  >
-                    {{ formatDate(budgetData.startDate) || $t('budgets.settings.notSet') }}
-                  </div>
-                </div>
-                <div>
-                  <span class="text-muted-foreground mb-1.5 block text-sm font-medium">
-                    {{ $t('budgets.settings.endDateLabel') }}
-                  </span>
-                  <div
-                    class="border-input bg-muted/50 text-muted-foreground flex h-10 items-center rounded-md border px-3 text-sm"
-                  >
-                    {{ formatDate(budgetData.endDate) || $t('budgets.settings.notSet') }}
-                  </div>
-                </div>
-              </div>
-              <Button @click="handleSaveFromDialog" :disabled="isBudgetDataUpdating" class="w-full">
+              <BudgetScheduleFields
+                :model-value="schedule"
+                :disabled="isBudgetDataUpdating"
+                @update:model-value="onScheduleUpdate"
+              />
+              <Button @click="handleSaveFromDialog" :disabled="isBudgetDataUpdating || !isScheduleValid" class="w-full">
                 <template v-if="isBudgetDataUpdating">{{ $t('common.actions.saving') }}</template>
                 <template v-else>{{ $t('common.actions.saveChanges') }}</template>
               </Button>
@@ -266,6 +295,15 @@ watchEffect(() => {
       </div>
     </div>
 
+    <BudgetPeriodStepper
+      v-if="isRecurring"
+      :period="budgetStats?.period ?? null"
+      :recurrence="recurrence"
+      :series-end="budgetItem?.endDate"
+      :is-pinned="selectedAt !== undefined"
+      @update:at="selectedAt = $event"
+    />
+
     <BudgetStatsCards :stats="stats" />
 
     <BudgetUtilizationBar
@@ -279,7 +317,15 @@ watchEffect(() => {
     <PillTabs v-model="activeTab" :items="tabItems" class="mb-6" />
 
     <!-- Statistics Tab -->
-    <BudgetStatistics v-if="activeTab === 'statistics'" :budget-id="currentBudgetId" />
+    <template v-if="activeTab === 'statistics'">
+      <RecurringBudgetOverview
+        v-if="isRecurring"
+        :budget-id="currentBudgetId"
+        :at="selectedAt"
+        @update:at="selectedAt = $event"
+      />
+      <BudgetStatistics v-else :budget-id="currentBudgetId" />
+    </template>
 
     <!-- Transactions Tab -->
     <div v-else-if="activeTab === 'transactions'">

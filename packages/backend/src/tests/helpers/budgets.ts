@@ -1,6 +1,7 @@
-import { BUDGET_TYPES, BudgetModel, endpointsTypes } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_TYPES, BudgetModel, endpointsTypes } from '@bt/shared/types';
 import addTransactionsToBudget from '@controllers/budgets/add-transaction-to-budget';
 import removeTransactionsFromBudget from '@controllers/budgets/remove-transaction-from-budget';
+import type { serializeBudgetPeriods } from '@root/serializers';
 import * as getBudgetService from '@root/services/budget.service';
 import * as createBudgetService from '@root/services/budgets/create-budget';
 import type { getBudgetStats } from '@root/services/budgets/stats';
@@ -13,6 +14,8 @@ interface TestCreateBudgetPayload {
   name: string;
   status?: string;
   type?: BUDGET_TYPES;
+  recurrence?: BUDGET_RECURRENCES;
+  timezone?: string | null;
   categoryIds?: string[];
   startDate?: string | Date | null;
   endDate?: string | Date | null;
@@ -23,8 +26,10 @@ interface TestCreateBudgetPayload {
 interface EditBudgetPayload {
   name?: string;
   categoryIds?: string[];
+  recurrence?: BUDGET_RECURRENCES;
+  timezone?: string | null;
   startDate?: string;
-  endDate?: string;
+  endDate?: string | null;
   limitAmount?: number;
   autoInclude?: boolean;
 }
@@ -176,10 +181,42 @@ export async function archiveCustomBudget<R extends boolean | undefined = undefi
   });
 }
 
-export async function getStats<R extends boolean | undefined = undefined>({ id, raw }: { id: string; raw?: R }) {
+export async function getStats<R extends boolean | undefined = undefined>({
+  id,
+  at,
+  raw,
+}: {
+  id: string;
+  /** Recurring budgets: the instant whose period to report. */
+  at?: string;
+  raw?: R;
+}) {
   return makeRequest<Awaited<ReturnType<typeof getBudgetStats>> | null, R>({
     method: 'get',
-    url: `/budgets/${id}/stats`,
+    url: `/budgets/${id}/stats${at ? `?at=${encodeURIComponent(at)}` : ''}`,
+    raw,
+  });
+}
+
+export async function getBudgetPeriods<R extends boolean | undefined = undefined>({
+  id,
+  at,
+  count,
+  raw,
+}: {
+  id: string;
+  at?: string;
+  count?: number;
+  raw?: R;
+}) {
+  const queryParams = new URLSearchParams();
+  if (at !== undefined) queryParams.set('at', at);
+  if (count !== undefined) queryParams.set('count', String(count));
+  const queryString = queryParams.toString();
+
+  return makeRequest<ReturnType<typeof serializeBudgetPeriods>, R>({
+    method: 'get',
+    url: `/budgets/${id}/periods${queryString ? `?${queryString}` : ''}`,
     raw,
   });
 }
@@ -208,16 +245,19 @@ export async function getCategoryBudgetTransactions<R extends boolean | undefine
   id,
   from,
   limit,
+  at,
   raw,
 }: {
   id: string;
   from?: number;
   limit?: number;
+  at?: string;
   raw?: R;
 }) {
   const queryParams = new URLSearchParams();
   if (from !== undefined) queryParams.set('from', String(from));
   if (limit !== undefined) queryParams.set('limit', String(limit));
+  if (at !== undefined) queryParams.set('at', at);
   const queryString = queryParams.toString();
 
   return makeRequest<CategoryBudgetTransactionsResponse, R>({
@@ -229,14 +269,16 @@ export async function getCategoryBudgetTransactions<R extends boolean | undefine
 
 export async function getSpendingStats<R extends boolean | undefined = undefined>({
   id,
+  at,
   raw,
 }: {
   id: string;
+  at?: string;
   raw?: R;
 }) {
   return makeRequest<endpointsTypes.BudgetSpendingStatsResponse, R>({
     method: 'get',
-    url: `/budgets/${id}/spending-stats`,
+    url: `/budgets/${id}/spending-stats${at ? `?at=${encodeURIComponent(at)}` : ''}`,
     raw,
   });
 }

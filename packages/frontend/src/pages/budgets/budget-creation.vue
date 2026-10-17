@@ -4,6 +4,7 @@ import { VUE_QUERY_CACHE_KEYS } from '@/common/const';
 import CategoryMultiSelectField from '@/components/fields/category-multi-select-field.vue';
 import DateField from '@/components/fields/date-field.vue';
 import InputField from '@/components/fields/input-field.vue';
+import SelectField from '@/components/fields/select-field.vue';
 import Button from '@/components/lib/ui/button/Button.vue';
 import Checkbox from '@/components/lib/ui/checkbox/Checkbox.vue';
 import { Label } from '@/components/lib/ui/label';
@@ -13,10 +14,12 @@ import { ApiErrorResponseError } from '@/js/errors';
 import { trackAnalyticsEvent } from '@/lib/posthog';
 import { cn } from '@/lib/utils';
 import { useOnboardingStore } from '@/stores/onboarding';
-import { BUDGET_TYPES } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_TYPES } from '@bt/shared/types';
 import { useMutation, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+
+import { type RecurrenceOption, getBrowserTimezone, useRecurrenceOptions } from './use-recurrence-options';
 
 const BUDGET_DEFAULT_VALUES: {
   id: string | null;
@@ -46,6 +49,9 @@ const { addSuccessNotification, addErrorNotification } = useNotificationCenter()
 
 const queryClient = useQueryClient();
 const form = ref({ ...BUDGET_DEFAULT_VALUES });
+const { recurrenceOptions, findRecurrenceOption } = useRecurrenceOptions();
+const recurrence = ref<RecurrenceOption>(findRecurrenceOption(BUDGET_RECURRENCES.none));
+const isRecurring = computed(() => recurrence.value.value !== BUDGET_RECURRENCES.none);
 const categoriesFieldTouched = ref(false);
 
 const { isPending: isMutating, mutate: createBudgetItem } = useMutation({
@@ -79,7 +85,20 @@ const categoryErrorMessage = computed(() => {
   if (form.value.categoryIds.length > 0) return undefined;
   return t('budgets.creation.categoriesRequired');
 });
-const isSubmitDisabled = computed(() => isMutating.value || !form.value.name || !isCategoryValid.value);
+// A recurring budget's start date anchors every period, so it can't be left empty.
+const isStartDateValid = computed(() => !isRecurring.value || !!form.value.startDate);
+const isSubmitDisabled = computed(
+  () => isMutating.value || !form.value.name || !isCategoryValid.value || !isStartDateValid.value,
+);
+
+const submit = () =>
+  createBudgetItem({
+    ...(form.value as any),
+    recurrence: recurrence.value.value,
+    timezone: getBrowserTimezone(),
+    // Linking every transaction in a range up front only makes sense for a one-off budget.
+    autoInclude: isRecurring.value ? false : form.value.autoInclude,
+  });
 
 const onCategoriesUpdate = (value: string[]) => {
   form.value.categoryIds = value;
@@ -96,7 +115,7 @@ const onBudgetTypeChange = (type: BUDGET_TYPES) => {
 </script>
 
 <template>
-  <form class="grid gap-4" @submit.prevent="() => createBudgetItem(form as any)">
+  <form class="grid gap-4" @submit.prevent="submit">
     <InputField
       v-model="form.name"
       :label="$t('budgets.creation.nameLabel')"
@@ -149,13 +168,26 @@ const onBudgetTypeChange = (type: BUDGET_TYPES) => {
       @update:model-value="onCategoriesUpdate"
     />
 
+    <div>
+      <SelectField
+        :model-value="recurrence"
+        :values="recurrenceOptions"
+        :label="$t('budgets.creation.recurrenceLabel')"
+        :placeholder="$t('budgets.creation.recurrencePlaceholder')"
+        @update:model-value="(option) => option && (recurrence = option)"
+      />
+      <p v-if="isRecurring" class="text-muted-foreground mt-1.5 text-xs">
+        {{ $t(`budgets.creation.recurrenceHint.${recurrence.value}`) }}
+      </p>
+    </div>
+
     <div class="flex justify-between gap-4">
       <DateField
         :model-value="form.startDate ?? undefined"
         :calendar-options="{
           maxDate: form.endDate ?? undefined,
         }"
-        :label="$t('budgets.creation.fromDateLabel')"
+        :label="isRecurring ? $t('budgets.creation.startsOnLabel') : $t('budgets.creation.fromDateLabel')"
         @update:model-value="(v: Date | undefined) => (form.startDate = v ?? null)"
       />
       <DateField
@@ -163,12 +195,12 @@ const onBudgetTypeChange = (type: BUDGET_TYPES) => {
         :calendar-options="{
           minDate: form.startDate ?? undefined,
         }"
-        :label="$t('budgets.creation.toDateLabel')"
+        :label="isRecurring ? $t('budgets.creation.endsOnLabel') : $t('budgets.creation.toDateLabel')"
         @update:model-value="(v: Date | undefined) => (form.endDate = v ?? null)"
       />
     </div>
 
-    <div v-if="!isCategoryBudget" class="flex gap-2">
+    <div v-if="!isCategoryBudget && !isRecurring" class="flex gap-2">
       <label class="flex cursor-pointer items-center gap-2">
         <Checkbox v-model="form.autoInclude" :disabled="!isDateExist" />
         {{ $t('budgets.creation.autoIncludeLabel') }}
@@ -178,7 +210,11 @@ const onBudgetTypeChange = (type: BUDGET_TYPES) => {
     <div>
       <InputField
         v-model.number="form.limitAmount"
-        :label="$t('budgets.creation.limitLabel')"
+        :label="
+          isRecurring
+            ? $t(`budgets.creation.limitPerPeriodLabel.${recurrence.value}`)
+            : $t('budgets.creation.limitLabel')
+        "
         :placeholder="$t('budgets.creation.limitPlaceholder')"
       />
     </div>

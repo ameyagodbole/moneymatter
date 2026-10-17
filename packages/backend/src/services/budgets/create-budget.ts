@@ -1,4 +1,4 @@
-import { BUDGET_STATUSES, BUDGET_TYPES } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_STATUSES, BUDGET_TYPES } from '@bt/shared/types';
 import { Money } from '@common/types/money';
 import { t } from '@i18n/index';
 import { ValidationError } from '@js/errors';
@@ -10,6 +10,7 @@ import { findTransactions } from '@models/transactions-query';
 import { withTransaction } from '@services/common/with-transaction';
 import { Op } from 'sequelize';
 
+import { normalizeRecurringDates } from './utils/budget-periods';
 import { expandCategoryIds } from './utils/expand-category-ids';
 
 interface CreateBudgetPayload {
@@ -18,6 +19,8 @@ interface CreateBudgetPayload {
   name: string;
   status: string;
   type?: BUDGET_TYPES;
+  recurrence?: BUDGET_RECURRENCES;
+  timezone?: string | null;
   categoryIds?: string[];
   startDate?: Date | null;
   endDate?: Date | null;
@@ -34,14 +37,28 @@ const prepareTransactionFilters = (payload: CreateBudgetPayload) => ({
 
 export const createBudget = withTransaction(async (payload: CreateBudgetPayload) => {
   const budgetType = payload.type ?? BUDGET_TYPES.manual;
+  const recurrence = payload.recurrence ?? BUDGET_RECURRENCES.none;
+  const timezone = payload.timezone ?? null;
+
+  let startDate = payload.startDate ?? null;
+  let endDate = payload.endDate ?? null;
+
+  if (recurrence !== BUDGET_RECURRENCES.none) {
+    if (!startDate) {
+      throw new ValidationError({ message: t({ key: 'budgets.recurringRequiresStartDate' }) });
+    }
+    ({ startDate, endDate } = normalizeRecurringDates({ budget: { recurrence, timezone, startDate, endDate } }));
+  }
 
   const budgetData: CreateBudgetPayload = {
     name: payload.name,
     userId: payload.userId,
     status: payload.status || BUDGET_STATUSES.active,
     type: budgetType,
-    startDate: payload.startDate ?? null,
-    endDate: payload.endDate ?? null,
+    recurrence,
+    timezone,
+    startDate,
+    endDate,
     autoInclude: payload.autoInclude ?? false,
     limitAmount: payload.limitAmount ?? null,
   };
@@ -125,6 +142,8 @@ const createBudgetModel = async ({
   name,
   status,
   type,
+  recurrence,
+  timezone,
   userId,
   startDate,
   endDate,
@@ -136,6 +155,8 @@ const createBudgetModel = async ({
     userId,
     status: status || BUDGET_STATUSES.active,
     type: type || BUDGET_TYPES.manual,
+    recurrence: recurrence ?? BUDGET_RECURRENCES.none,
+    timezone: timezone ?? null,
     startDate: startDate || null,
     endDate: endDate || null,
     autoInclude: autoInclude ?? false,
