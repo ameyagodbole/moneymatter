@@ -110,7 +110,12 @@ const emit = defineEmits<{
 const searchTerm = ref('');
 const isOpen = ref(false);
 
-const { tags } = storeToRefs(useTagsStore());
+const tagsStore = useTagsStore();
+const { tags, isFetched, isLoading } = storeToRefs(tagsStore);
+
+// Hosts don't all load tags themselves (e.g. the budget "Add transactions" dialog),
+// so the filter makes sure its own options are there.
+if (!isFetched.value && !isLoading.value) tagsStore.loadTags();
 
 const tagsCount = computed(() => tags.value.length);
 
