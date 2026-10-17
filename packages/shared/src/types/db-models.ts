@@ -401,6 +401,24 @@ export interface UserExchangeRatesModel extends ExchangeRatesModel {
   custom?: boolean;
 }
 
+/**
+ * One rule of an automatic budget. A transaction matches the rule when every condition
+ * that is set holds; an empty list means "any". A budget counts a transaction when any of
+ * its rules matches.
+ *
+ * With `categoryIds` set, only the matching parts of a split transaction count. Without
+ * it (a tags, account or payee rule), the whole transaction counts.
+ */
+export interface BudgetRuleGroup {
+  /** Stored expanded: a parent category is saved with all its children. */
+  categoryIds: RecordId[];
+  tagIds: RecordId[];
+  /** `any`: the transaction has at least one of the tags. `all`: it has every one. */
+  tagMatch: 'any' | 'all';
+  accountIds: RecordId[];
+  payeeIds: RecordId[];
+}
+
 export interface BudgetModel {
   id: RecordId;
   userId: number;
@@ -417,6 +435,8 @@ export interface BudgetModel {
   endDate?: Date;
   limitAmount?: number;
   autoInclude?: boolean;
+  /** Matching rules of an automatic (`category`) budget; null for manual budgets. */
+  rules?: BudgetRuleGroup[] | null;
   /**
    * Category IDs for category-based budgets.
    * Use for CREATE/UPDATE requests - the backend will expand parent IDs to include children.

@@ -21,10 +21,8 @@
       "typeLabel": "Budget type",
       "typeManual": "Manual",
       "typeManualDescription": "Manually add transactions to this budget",
-      "typeCategory": "Category-based",
-      "typeCategoryDescription": "Auto-track spending by categories",
-      "categoriesLabel": "Categories to track",
-      "categoriesRequired": "Select at least one category",
+      "typeCategory": "Automatic",
+      "typeCategoryDescription": "Tracks transactions automatically by category, tag, account or payee",
       "fromDateLabel": "From date",
       "toDateLabel": "To date",
       "recurrenceLabel": "Repeats",
@@ -162,6 +160,34 @@
     "manualBudget": {
       "edit": "Edit",
       "editTitle": "Edit Budget"
+    },
+    "rules": {
+      "title": "What this budget tracks",
+      "description": "A transaction counts when any rule matches. Within a rule, every condition you fill in must hold; empty fields match anything.",
+      "or": "or",
+      "and": "and",
+      "ruleTitle": "Rule {number}",
+      "removeRule": "Remove rule",
+      "categoriesLabel": "Categories",
+      "anyCategory": "Any category",
+      "tagsLabel": "Tags",
+      "anyTag": "Any tag",
+      "tagMatchAny": "Any of these tags",
+      "tagMatchAll": "All of these tags",
+      "accountsLabel": "Accounts",
+      "anyAccount": "Any account",
+      "payeesLabel": "Payees",
+      "anyPayee": "Any payee",
+      "addRule": "Add another rule",
+      "required": "Add at least one category, tag, account or payee to a rule",
+      "cardTitle": "Tracked by",
+      "rulesCount": "{count} rule | {count} rules",
+      "summary": {
+        "categories": "in",
+        "tags": "tagged",
+        "accounts": "from",
+        "payees": "paid to"
+      }
     },
     "share": {
       "sharedByBadge": "Shared by {handle}"

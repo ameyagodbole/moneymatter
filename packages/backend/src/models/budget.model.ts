@@ -1,4 +1,4 @@
-import { BUDGET_RECURRENCES, BUDGET_STATUSES, BUDGET_TYPES, RecordId } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_STATUSES, BUDGET_TYPES, type BudgetRuleGroup, RecordId } from '@bt/shared/types';
 import { IdColumn } from '@common/types/id-column';
 import { Money } from '@common/types/money';
 import { MoneyField } from '@common/types/money-column';
@@ -32,6 +32,10 @@ export default class Budgets extends Model {
 
   @Column({ allowNull: false, defaultValue: BUDGET_RECURRENCES.none, type: DataType.STRING(20) })
   recurrence!: BUDGET_RECURRENCES;
+
+  /** Matching rules of a `category` budget; null for manual budgets. See `BudgetRuleGroup`. */
+  @Column({ allowNull: true, type: DataType.JSONB })
+  rules!: BudgetRuleGroup[] | null;
 
   /** IANA zone the periods are cut in. Null means UTC. */
   @Column({ allowNull: true, type: DataType.STRING(64) })

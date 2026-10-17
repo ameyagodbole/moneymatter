@@ -121,7 +121,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const tagsStore = useTagsStore();
-const { tags } = storeToRefs(tagsStore);
+const { tags, isFetched, isLoading } = storeToRefs(tagsStore);
+
+// Not every host loads tags itself (e.g. the budget rule editor), so make sure the options are there.
+if (!isFetched.value && !isLoading.value) tagsStore.loadTags();
 
 const isOpen = ref(false);
 const wrapperRef = ref<HTMLDivElement>();

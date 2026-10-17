@@ -296,6 +296,26 @@ export async function remapEmbeddedReferences({
     transaction,
     mutate: mutateOriginalTransactionState,
   });
+
+  // 9. Budgets.rules[] → categoryIds[] (Categories), tagIds[] (Tags), accountIds[] (Accounts), payeeIds[] (Payees).
+  await rewriteColumn({
+    model: Budgets,
+    fileName: 'budgets',
+    column: 'rules',
+    archive,
+    insertedIds,
+    transaction,
+    mutate: ({ draft }) => {
+      if (!Array.isArray(draft)) return;
+      for (const group of draft as Record<string, unknown>[]) {
+        if (typeof group !== 'object' || group === null) continue;
+        remapIdArrayInPlace({ arr: group.categoryIds, targetTable: tables.categories, insertedIds });
+        remapIdArrayInPlace({ arr: group.tagIds, targetTable: tables.tags, insertedIds });
+        remapIdArrayInPlace({ arr: group.accountIds, targetTable: tables.accounts, insertedIds });
+        remapIdArrayInPlace({ arr: group.payeeIds, targetTable: tables.payees, insertedIds });
+      }
+    },
+  });
 }
 
 /**

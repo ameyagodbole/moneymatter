@@ -22,8 +22,6 @@ import {
   ArchiveRestoreIcon,
   ArrowRightIcon,
   CalendarIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
   LayersIcon,
   PencilIcon,
   TagIcon,
@@ -45,6 +43,8 @@ import { useArchiveToggle } from './shared/use-archive-toggle';
 import { useBudgetDetails } from './shared/use-budget-details';
 import BudgetPeriodStepper from './recurring/budget-period-stepper.vue';
 import RecurringBudgetOverview from './recurring/recurring-budget-overview.vue';
+import BudgetRulesSummary from '../components/budget-rules-summary.vue';
+import { getEditableRules } from '../components/budget-rules';
 import BudgetStatistics from './statistics/budget-statistics.vue';
 import TransactionsList from './transactions-list.vue';
 
@@ -56,7 +56,6 @@ const { t } = useI18n();
 const budgetData = ref();
 const currentBudgetId = ref<string>(route.params.id as string);
 const isEditDialogOpen = ref(false);
-const isCategoriesExpanded = ref(false);
 
 const { data: budgetItem } = useQuery({
   queryFn: () => loadBudgetById(currentBudgetId.value),
@@ -88,6 +87,7 @@ const { isOwner, canManage, canWrite, isSharedWithCaller, ownerHandle } = useBud
 
 // Category budgets track by category and take hand overrides; manual budgets count only what's linked.
 const isCategoryBudget = computed(() => budgetItem.value?.type === BUDGET_TYPES.category);
+const editableRules = computed(() => (budgetItem.value ? getEditableRules({ budget: budgetItem.value }) : []));
 
 const { mutateAsync, isPending: isBudgetDataUpdating } = useMutation({
   mutationFn: editBudget,
@@ -281,53 +281,18 @@ watch(
       </div>
     </div>
 
-    <!-- Tracked Categories Card -->
+    <!-- What the budget tracks -->
     <Card v-if="isCategoryBudget" class="mb-6 p-4">
-      <div class="flex items-center justify-between">
+      <div class="mb-3 flex items-center justify-between">
         <div class="flex items-center gap-2">
           <TagIcon class="text-muted-foreground size-4" />
-          <span class="text-sm font-medium">{{ $t('budgets.categoryBudget.trackedCategories') }}</span>
+          <span class="text-sm font-medium">{{ $t('budgets.rules.cardTitle') }}</span>
         </div>
         <span class="text-muted-foreground text-sm">
-          {{ $t('budgets.categoryBudget.categoriesCount', { count: budgetData.categories?.length || 0 }) }}
+          {{ $t('budgets.rules.rulesCount', editableRules.length) }}
         </span>
       </div>
-      <div
-        class="relative mt-3"
-        :class="{ 'max-h-16 overflow-hidden': !isCategoriesExpanded && budgetData.categories?.length > 6 }"
-      >
-        <div class="flex flex-wrap gap-2">
-          <span
-            v-for="category in budgetData.categories"
-            :key="category.id"
-            class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-white"
-            :style="{ backgroundColor: category.color }"
-          >
-            {{ category.name }}
-          </span>
-        </div>
-        <!-- Gradient overlay when collapsed -->
-        <div
-          v-if="!isCategoriesExpanded && budgetData.categories?.length > 6"
-          class="from-card pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t to-transparent"
-        />
-      </div>
-      <Button
-        v-if="budgetData.categories?.length > 6"
-        variant="ghost"
-        size="sm"
-        class="text-muted-foreground hover:text-foreground mt-2 h-auto p-0 text-xs"
-        @click="isCategoriesExpanded = !isCategoriesExpanded"
-      >
-        <template v-if="isCategoriesExpanded">
-          <ChevronUpIcon class="size-3" />
-          {{ $t('budgets.categoryBudget.showLess') }}
-        </template>
-        <template v-else>
-          <ChevronDownIcon class="size-3" />
-          {{ $t('budgets.categoryBudget.showMore') }}
-        </template>
-      </Button>
+      <BudgetRulesSummary :rules="editableRules" />
       <p class="text-muted-foreground mt-3 text-xs">
         {{ $t('budgets.categoryBudget.autoTrackedInfo') }}
       </p>

@@ -1,14 +1,14 @@
-import { BUDGET_TYPES, type RecordId, TRANSACTION_TRANSFER_NATURE, TRANSACTION_TYPES } from '@bt/shared/types';
-import Accounts from '@models/accounts.model';
+import { BUDGET_TYPES, type BudgetRuleGroup, type RecordId, TRANSACTION_TYPES } from '@bt/shared/types';
 import BudgetExcludedTransactions from '@models/budget-excluded-transactions.model';
 import type Budgets from '@models/budget.model';
 import TransactionSplits from '@models/transaction-splits.model';
-import { PlannedPolicy, transactionsInclude } from '@models/transactions-query';
+import TransactionTags from '@models/transaction-tags.model';
+import { PlannedPolicy } from '@models/transactions-query';
 import * as Transactions from '@models/transactions.model';
 import { statsTransactions } from '@services/stats/stats-transactions';
-import { Op } from 'sequelize';
+import { Op, type WhereOptions, literal } from 'sequelize';
 
-import { buildDateFilter } from './build-date-filter';
+import { getBudgetRuleGroups, matchRuleGroups } from './budget-rules';
 import { fetchBudgetRefundPairs } from './refund-pairs';
 
 /**
@@ -52,9 +52,9 @@ export interface BudgetEntries {
  *
  * - Manual budgets count the transactions linked through `BudgetTransactions`, with no
  *   userId filter, so a `write` recipient's attached rows count.
- * - Category budgets count the owner's transactions whose category matches (a split
- *   transaction only by its matching splits), minus the ones excluded by hand, plus any
- *   transaction linked by hand that the categories didn't already count.
+ * - Automatic (`category`) budgets count the owner's transactions their rules match (see
+ *   `matchRuleGroups` for how split transactions count), minus the ones excluded by hand,
+ *   plus any transaction linked by hand that the rules didn't already count.
  *
  * Planned rows count for the owner only on matched amounts, and for the caller only on
  * linked ones, so a recipient never sees the owner's plans.
@@ -72,7 +72,7 @@ export const collectBudgetEntries = async ({
   from,
   to,
 }: {
-  budget: Pick<Budgets, 'id' | 'type'> & { categories?: { id: string }[] };
+  budget: Pick<Budgets, 'id' | 'type' | 'rules'> & { categories?: { id: string }[] };
   ownerUserId: number;
   callerUserId: number;
   isOwner: boolean;
@@ -86,8 +86,11 @@ export const collectBudgetEntries = async ({
 
   if (budget.type === BUDGET_TYPES.category) {
     const [matched, excludedIds] = await Promise.all([
-      collectCategoryEntries({
-        categoryIds: budget.categories?.map((c) => c.id) ?? [],
+      collectRuleEntries({
+        groups: getBudgetRuleGroups({
+          rules: budget.rules,
+          categoryIds: (budget.categories ?? []).map((c) => c.id as RecordId),
+        }),
         ownerUserId,
         isOwner,
         from,
@@ -190,94 +193,146 @@ const collectLinkedEntries = async ({
   };
 };
 
-const collectCategoryEntries = async ({
-  categoryIds,
+/** `"col" IN (SELECT "transactionId" FROM <table> WHERE <column> IN (...))`, with escaped ids. */
+const escapeSql = (value: string) => TransactionSplits.sequelize!.escape(value);
+
+const transactionIdsWhere = ({ table, column, ids }: { table: string; column: string; ids: string[] }) => ({
+  id: {
+    [Op.in]: literal(
+      `(SELECT "transactionId" FROM "${table}" WHERE "${column}" IN (${ids.map(escapeSql).join(', ')}))`,
+    ),
+  },
+});
+
+/**
+ * SQL a transaction must pass for a rule to have a chance at it. It is exact except for
+ * `tagMatch: 'all'` (checked as "any" here) and which parts count; `matchRuleGroups`
+ * settles both on the loaded rows.
+ */
+const ruleGroupWhere = ({ group }: { group: BudgetRuleGroup }): WhereOptions => ({
+  [Op.and]: [
+    ...(group.categoryIds.length
+      ? [
+          {
+            [Op.or]: [
+              { categoryId: { [Op.in]: group.categoryIds } },
+              transactionIdsWhere({ table: 'TransactionSplits', column: 'categoryId', ids: group.categoryIds }),
+            ],
+          },
+        ]
+      : []),
+    ...(group.accountIds.length ? [{ accountId: { [Op.in]: group.accountIds } }] : []),
+    ...(group.payeeIds.length ? [{ payeeId: { [Op.in]: group.payeeIds } }] : []),
+    ...(group.tagIds.length
+      ? [transactionIdsWhere({ table: 'TransactionTags', column: 'tagId', ids: group.tagIds })]
+      : []),
+  ],
+});
+
+/**
+ * The owner's transactions an automatic budget's rules match, as one entry per counted
+ * part: the remainder on the transaction's own category, and each matching split.
+ */
+const collectRuleEntries = async ({
+  groups,
   ownerUserId,
   isOwner,
   from,
   to,
 }: {
-  categoryIds: string[];
+  groups: BudgetRuleGroup[];
   ownerUserId: number;
   isOwner: boolean;
   from: Date | null;
   to: Date | null;
 }): Promise<CountedEntries> => {
-  if (!categoryIds.length) return { entries: [], countedTransactions: [] };
+  if (!groups.length) return { entries: [], countedTransactions: [] };
 
   // Planned rows are owner-only: they count as spent for the owner, but a share
   // recipient must never see them.
   const planned: PlannedPolicy = isOwner ? 'include' : 'exclude';
 
-  const [{ rows: primaryCategoryTransactions }, matchingSplits] = await Promise.all([
-    statsTransactions({
-      access: { creator: ownerUserId },
-      planned,
-      refunds: 'ignore',
-      window: { from: from ?? undefined, to: to ?? undefined },
-      where: { categoryId: { [Op.in]: categoryIds } },
-      include: [{ model: TransactionSplits, as: 'splits', required: false }],
-    }),
+  const { rows: candidates } = await statsTransactions({
+    access: { creator: ownerUserId },
+    planned,
+    refunds: 'ignore',
+    window: { from: from ?? undefined, to: to ?? undefined },
+    where: { [Op.or]: groups.map((group) => ruleGroupWhere({ group })) },
+    attributes: ['id', 'time', 'refAmount', 'transactionType', 'refundLinked', 'categoryId', 'accountId', 'payeeId'],
+  });
+
+  if (!candidates.length) return { entries: [], countedTransactions: [] };
+
+  const candidateIds = candidates.map((tx) => tx.id);
+  const [splits, tags] = await Promise.all([
     TransactionSplits.findAll({
-      where: {
-        userId: ownerUserId,
-        categoryId: { [Op.in]: categoryIds },
-      },
-      include: [
-        transactionsInclude({
-          planned,
-          required: true,
-          as: 'transaction',
-          where: {
-            transferNature: TRANSACTION_TRANSFER_NATURE.not_transfer,
-            ...buildDateFilter({ startDate: from, endDate: to }),
-          },
-          attributes: ['id', 'time', 'transactionType', 'refundLinked'],
-          include: [{ model: Accounts, where: { excludeFromStats: false }, attributes: [] }],
-        }),
-      ],
+      where: { transactionId: { [Op.in]: candidateIds } },
+      attributes: ['id', 'transactionId', 'categoryId', 'refAmount'],
+    }),
+    TransactionTags.findAll({
+      where: { transactionId: { [Op.in]: candidateIds } },
+      attributes: ['transactionId', 'tagId'],
     }),
   ]);
+
+  const splitsByTx = new Map<string, TransactionSplits[]>();
+  for (const split of splits)
+    splitsByTx.set(split.transactionId, [...(splitsByTx.get(split.transactionId) ?? []), split]);
+  const tagsByTx = new Map<string, Set<string>>();
+  for (const tag of tags)
+    tagsByTx.set(tag.transactionId, (tagsByTx.get(tag.transactionId) ?? new Set()).add(tag.tagId));
 
   const entries: BudgetEntry[] = [];
   const countedTransactions: { id: string; refundLinked: boolean }[] = [];
 
-  // A transaction whose own category matches counts what its splits leave on that category:
-  // the whole amount when it has no splits, the remainder when it does (as the global stats
-  // allocate it). Matching splits are counted on their own below.
-  for (const tx of primaryCategoryTransactions) {
-    const splits = (tx.get('splits') as TransactionSplits[] | undefined) ?? [];
-    const splitsCents = splits.reduce((sum, split) => sum + split.refAmount.toCents(), 0);
-    const remainderCents = tx.refAmount.toCents() - splitsCents;
-    if (remainderCents <= 0) continue;
-
-    entries.push({
-      transactionId: tx.id,
-      splitId: null,
-      time: tx.time,
-      cents: remainderCents,
-      isExpense: tx.transactionType === TRANSACTION_TYPES.expense,
-      categoryId: tx.categoryId,
-      source: 'rule',
+  for (const tx of candidates) {
+    const txSplits = splitsByTx.get(tx.id) ?? [];
+    const cents = tx.refAmount.toCents();
+    const match = matchRuleGroups({
+      groups,
+      tx: {
+        categoryId: tx.categoryId,
+        accountId: tx.accountId,
+        payeeId: tx.payeeId,
+        tagIds: tagsByTx.get(tx.id) ?? new Set(),
+        cents,
+        splits: txSplits.map((split) => ({
+          id: split.id,
+          categoryId: split.categoryId,
+          cents: split.refAmount.toCents(),
+        })),
+      },
     });
+    if (!match) continue;
+
+    const isExpense = tx.transactionType === TRANSACTION_TYPES.expense;
+
+    if (match.remainder) {
+      const splitsCents = txSplits.reduce((sum, split) => sum + split.refAmount.toCents(), 0);
+      entries.push({
+        transactionId: tx.id,
+        splitId: null,
+        time: tx.time,
+        cents: cents - splitsCents,
+        isExpense,
+        categoryId: tx.categoryId,
+        source: 'rule',
+      });
+    }
+    for (const split of txSplits) {
+      if (!match.splitIds.has(split.id)) continue;
+      entries.push({
+        transactionId: tx.id,
+        splitId: split.id,
+        time: tx.time,
+        cents: split.refAmount.toCents(),
+        isExpense,
+        categoryId: split.categoryId,
+        source: 'rule',
+      });
+    }
     countedTransactions.push({ id: tx.id, refundLinked: tx.refundLinked });
   }
 
-  for (const split of matchingSplits) {
-    const transaction = split.get('transaction') as Transactions.default;
-    if (!transaction) continue;
-
-    entries.push({
-      transactionId: transaction.id,
-      splitId: split.id,
-      time: transaction.time,
-      cents: split.refAmount.toCents(),
-      isExpense: transaction.transactionType === TRANSACTION_TYPES.expense,
-      categoryId: split.categoryId,
-      source: 'rule',
-    });
-    countedTransactions.push({ id: transaction.id, refundLinked: transaction.refundLinked });
-  }
-
-  return { entries, countedTransactions: dedupeCounted(countedTransactions) };
+  return { entries, countedTransactions };
 };

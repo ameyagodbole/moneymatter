@@ -5,7 +5,7 @@
  * Money fields auto-convert via .toNumber().
  * Deserializers convert API decimal inputs to Money.
  */
-import { BUDGET_RECURRENCES, BUDGET_TYPES, ResourceShareInfo } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_TYPES, type BudgetRuleGroup, ResourceShareInfo } from '@bt/shared/types';
 import { Money, centsToApiDecimal, centsToApiDecimalOrNull } from '@common/types/money';
 import type Budgets from '@models/budget.model';
 import type { BudgetShareContext } from '@services/sharing/get-shared-budgets.service';
@@ -34,6 +34,8 @@ interface BudgetApiResponse {
   autoInclude: boolean;
   limitAmount: number | null;
   categories: BudgetCategoryResponse[];
+  /** Matching rules of an automatic budget; null for manual budgets. */
+  rules: BudgetRuleGroup[] | null;
   /** Present on user-facing list/detail responses when share context is attached. */
   share?: ResourceShareInfo;
 }
@@ -66,6 +68,7 @@ export function serializeBudget(budget: Budgets & { _shareContext?: BudgetShareC
     autoInclude: budget.autoInclude,
     limitAmount: centsToApiDecimalOrNull(budget.limitAmount),
     categories,
+    rules: budget.rules,
   };
 
   if (budget._shareContext) {

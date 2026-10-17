@@ -1,4 +1,4 @@
-import { BUDGET_RECURRENCES } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, type BudgetRuleGroup } from '@bt/shared/types';
 
 export interface BudgetSchedule {
   recurrence: BUDGET_RECURRENCES;
@@ -10,6 +10,8 @@ interface BudgetEditFormValues {
   name: string;
   limitAmount: number | null | undefined;
   categoryIds?: string[];
+  /** Automatic budgets: the full set of rules, sent instead of `categoryIds`. */
+  rules?: BudgetRuleGroup[];
   /** Present only when the schedule (recurrence or its dates) was edited. */
   schedule?: BudgetSchedule;
   /** IANA zone the periods are cut in; sent with any schedule change. */
@@ -19,6 +21,7 @@ interface BudgetEditFormValues {
 export interface BudgetEditPayload {
   name: string;
   categoryIds?: string[];
+  rules?: BudgetRuleGroup[];
   limitAmount?: number;
   recurrence?: BUDGET_RECURRENCES;
   timezone?: string;
@@ -42,10 +45,11 @@ export const buildBudgetEditPayload = ({
   name,
   limitAmount,
   categoryIds,
+  rules,
   schedule,
   timezone,
 }: BudgetEditFormValues): BudgetEditPayload => {
-  const payload: BudgetEditPayload = { name, ...(categoryIds && { categoryIds }) };
+  const payload: BudgetEditPayload = { name, ...(categoryIds && { categoryIds }), ...(rules && { rules }) };
 
   if (typeof limitAmount === 'number' && Number.isFinite(limitAmount) && limitAmount > 0) {
     payload.limitAmount = limitAmount;

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import CategoryMultiSelectField from '@/components/fields/category-multi-select-field.vue';
 import InputField from '@/components/fields/input-field.vue';
 import Button from '@/components/lib/ui/button/Button.vue';
-import { BUDGET_RECURRENCES, BUDGET_TYPES, type BudgetModel } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_TYPES, type BudgetModel, type BudgetRuleGroup } from '@bt/shared/types';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
+import BudgetRulesEditor from '../components/budget-rules-editor.vue';
+import { getEditableRules, getSavableRules } from '../components/budget-rules';
 import { getBrowserTimezone } from '../use-recurrence-options';
 import { type BudgetEditPayload, type BudgetSchedule, buildBudgetEditPayload } from './build-budget-edit-payload';
 import BudgetScheduleFields from './shared/budget-schedule-fields.vue';
@@ -24,8 +25,8 @@ const { t } = useI18n();
 const formData = ref({
   name: '',
   limitAmount: null as number | null,
-  categoryIds: [] as string[],
 });
+const rules = ref<BudgetRuleGroup[]>([]);
 const schedule = ref<BudgetSchedule>({ recurrence: BUDGET_RECURRENCES.none, startDate: null, endDate: null });
 const isScheduleDirty = ref(false);
 const isCategoryBudget = computed(() => props.budget.type === BUDGET_TYPES.category);
@@ -35,8 +36,8 @@ const initFormData = () => {
   formData.value = {
     name: props.budget.name,
     limitAmount: props.budget.limitAmount ?? null,
-    categoryIds: props.budget.categories?.map((c) => c.id) ?? [],
   };
+  rules.value = getEditableRules({ budget: props.budget });
   schedule.value = {
     recurrence: props.budget.recurrence,
     startDate: props.budget.startDate ? new Date(props.budget.startDate) : null,
@@ -51,6 +52,8 @@ const onScheduleUpdate = (value: BudgetSchedule) => {
 };
 
 // A recurring budget's start date anchors every period, so it can't be cleared.
+const isRulesValid = computed(() => !isCategoryBudget.value || getSavableRules({ rules: rules.value }).length > 0);
+
 const isScheduleValid = computed(
   () => schedule.value.recurrence === BUDGET_RECURRENCES.none || !!schedule.value.startDate,
 );
@@ -70,7 +73,7 @@ const handleSave = () => {
     buildBudgetEditPayload({
       name: formData.value.name,
       limitAmount: formData.value.limitAmount,
-      ...(isCategoryBudget.value && { categoryIds: formData.value.categoryIds }),
+      ...(isCategoryBudget.value && { rules: getSavableRules({ rules: rules.value }) }),
       // Only a changed schedule is sent, so saving a rename never moves the periods to this browser's zone.
       ...(isScheduleDirty.value && { schedule: schedule.value, timezone: getBrowserTimezone() }),
     }),
@@ -100,15 +103,15 @@ const handleSave = () => {
       class="w-full"
       :disabled="isLoading"
     />
-    <CategoryMultiSelectField
+    <BudgetRulesEditor
       v-if="isCategoryBudget"
-      v-model="formData.categoryIds"
-      :label="t('budgets.categoryBudget.settings.categoriesLabel')"
+      v-model="rules"
       :disabled="isLoading"
+      :error-message="isRulesValid ? undefined : t('budgets.rules.required')"
     />
     <BudgetScheduleFields :model-value="schedule" :disabled="isLoading" @update:model-value="onScheduleUpdate" />
     <div class="flex justify-end">
-      <Button @click="handleSave" :disabled="isLoading || !isScheduleValid">
+      <Button @click="handleSave" :disabled="isLoading || !isScheduleValid || !isRulesValid">
         <template v-if="isLoading">{{ t('pages.budgetDetails.saving') }}</template>
         <template v-else>{{ t('pages.budgetDetails.saveChanges') }}</template>
       </Button>

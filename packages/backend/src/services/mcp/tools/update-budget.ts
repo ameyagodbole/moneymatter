@@ -42,7 +42,28 @@ const inputSchema = {
   categoryIds: z
     .array(recordId())
     .optional()
-    .describe('Replace the linked category IDs (only applies to category-type budgets)'),
+    .describe(
+      'Replace the linked category IDs (only applies to category-type budgets with a single rule; use rules otherwise)',
+    ),
+  rules: z
+    .array(
+      z.object({
+        categoryIds: z.array(recordId()).default([]).describe('Categories (parents include their children)'),
+        tagIds: z.array(recordId()).default([]).describe('Tags'),
+        tagMatch: z
+          .enum(['any', 'all'])
+          .default('any')
+          .describe('Whether the transaction needs any or all of the tags'),
+        accountIds: z.array(recordId()).default([]).describe('Accounts'),
+        payeeIds: z.array(recordId()).default([]).describe('Payees'),
+      }),
+    )
+    .min(1)
+    .max(20)
+    .optional()
+    .describe(
+      'Category budgets only: matching rules. A transaction counts when any rule matches; a rule matches when all its non-empty conditions hold. A rule with categories counts only the matching parts of a split transaction; a rule without categories counts the whole transaction. Replaces all rules; overrides categoryIds.',
+    ),
 };
 
 export function registerUpdateBudget(server: McpServer) {
@@ -69,6 +90,7 @@ export function registerUpdateBudget(server: McpServer) {
         limitAmount: args.limitAmount !== undefined ? Money.fromDecimal(args.limitAmount) : undefined,
         autoInclude: args.autoInclude,
         categoryIds: args.categoryIds,
+        rules: args.rules,
       });
 
       return jsonContent({ data: budget });

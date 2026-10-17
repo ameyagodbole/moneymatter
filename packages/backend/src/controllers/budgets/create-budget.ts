@@ -5,6 +5,7 @@ import { serializeBudget } from '@root/serializers';
 import * as budgetsService from '@root/services/budgets/create-budget';
 import { z } from 'zod';
 
+import { budgetRulesSchema } from './budget-rules-schema';
 import { budgetTimezone } from './budget-timezone';
 
 const schema = z.object({
@@ -16,6 +17,7 @@ const schema = z.object({
         recurrence: z.nativeEnum(BUDGET_RECURRENCES).optional().default(BUDGET_RECURRENCES.none),
         timezone: budgetTimezone().nullable().optional(),
         categoryIds: recordArrayIds().optional(),
+        rules: budgetRulesSchema().optional(),
         startDate: dateBound({ precision: 'datetime' }).nullable().optional(),
         endDate: dateBound({ precision: 'datetime' }).nullable().optional(),
         autoInclude: z.boolean().optional().default(false),
@@ -28,17 +30,21 @@ const schema = z.object({
         message: 'Recurring budgets require a start date',
         path: ['startDate'],
       })
-      .refine((data) => data.type !== BUDGET_TYPES.category || (data.categoryIds && data.categoryIds.length > 0), {
-        message: 'Category budgets require at least one category',
-        path: ['categoryIds'],
-      }),
+      .refine(
+        (data) =>
+          data.type !== BUDGET_TYPES.category || !!data.rules || (data.categoryIds && data.categoryIds.length > 0),
+        {
+          message: 'Category budgets require at least one category or rule',
+          path: ['categoryIds'],
+        },
+      ),
     ['startDate', 'endDate'],
   ),
 });
 
 export default createController(schema, async ({ user, body }) => {
   const { id: userId } = user;
-  const { name, type, recurrence, timezone, categoryIds, startDate, endDate, autoInclude, limitAmount } = body;
+  const { name, type, recurrence, timezone, categoryIds, rules, startDate, endDate, autoInclude, limitAmount } = body;
 
   const budget = await budgetsService.createBudget({
     name,
@@ -48,6 +54,7 @@ export default createController(schema, async ({ user, body }) => {
     recurrence,
     timezone,
     categoryIds,
+    rules,
     startDate: startDate ? new Date(startDate) : undefined,
     endDate: endDate ? new Date(endDate) : undefined,
     autoInclude,

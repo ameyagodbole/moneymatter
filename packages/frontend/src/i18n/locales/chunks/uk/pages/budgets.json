@@ -21,10 +21,8 @@
       "typeLabel": "Тип бюджету",
       "typeManual": "Ручний",
       "typeManualDescription": "Додавайте транзакції до цього бюджету вручну",
-      "typeCategory": "За категоріями",
-      "typeCategoryDescription": "Автоматично відстежувати витрати за категоріями",
-      "categoriesLabel": "Категорії для відстеження",
-      "categoriesRequired": "Виберіть щонайменше одну категорію",
+      "typeCategory": "Автоматичний",
+      "typeCategoryDescription": "Автоматично відстежує транзакції за категорією, тегом, рахунком або отримувачем",
       "fromDateLabel": "Від дати",
       "toDateLabel": "До дати",
       "recurrenceLabel": "Повторюється",
@@ -162,6 +160,34 @@
     "manualBudget": {
       "edit": "Редагувати",
       "editTitle": "Редагування бюджету"
+    },
+    "rules": {
+      "title": "Що відстежує цей бюджет",
+      "description": "Транзакція враховується, якщо збігається будь-яке правило. У межах правила має виконуватися кожна заповнена умова; порожні поля підходять під будь-що.",
+      "or": "або",
+      "and": "і",
+      "ruleTitle": "Правило {number}",
+      "removeRule": "Видалити правило",
+      "categoriesLabel": "Категорії",
+      "anyCategory": "Будь-яка категорія",
+      "tagsLabel": "Теги",
+      "anyTag": "Будь-який тег",
+      "tagMatchAny": "Будь-який із цих тегів",
+      "tagMatchAll": "Усі ці теги",
+      "accountsLabel": "Рахунки",
+      "anyAccount": "Будь-який рахунок",
+      "payeesLabel": "Отримувачі",
+      "anyPayee": "Будь-який отримувач",
+      "addRule": "Додати ще одне правило",
+      "required": "Додайте до правила щонайменше одну категорію, тег, рахунок або отримувача",
+      "cardTitle": "Відстежується за",
+      "rulesCount": "{count} правило | {count} правила | {count} правил",
+      "summary": {
+        "categories": "у",
+        "tags": "з тегом",
+        "accounts": "з рахунку",
+        "payees": "сплачено отримувачу"
+      }
     },
     "share": {
       "sharedByBadge": "Ділиться: {handle}"

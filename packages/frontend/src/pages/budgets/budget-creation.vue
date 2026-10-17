@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { createBudget } from '@/api/budgets';
 import { VUE_QUERY_CACHE_KEYS } from '@/common/const';
-import CategoryMultiSelectField from '@/components/fields/category-multi-select-field.vue';
 import DateField from '@/components/fields/date-field.vue';
 import InputField from '@/components/fields/input-field.vue';
 import SelectField from '@/components/fields/select-field.vue';
@@ -14,11 +13,13 @@ import { ApiErrorResponseError } from '@/js/errors';
 import { trackAnalyticsEvent } from '@/lib/posthog';
 import { cn } from '@/lib/utils';
 import { useOnboardingStore } from '@/stores/onboarding';
-import { BUDGET_RECURRENCES, BUDGET_TYPES } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_TYPES, type BudgetRuleGroup } from '@bt/shared/types';
 import { useMutation, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
+import BudgetRulesEditor from './components/budget-rules-editor.vue';
+import { createEmptyRule, getSavableRules } from './components/budget-rules';
 import { type RecurrenceOption, getBrowserTimezone, useRecurrenceOptions } from './use-recurrence-options';
 
 const BUDGET_DEFAULT_VALUES: {
@@ -52,7 +53,8 @@ const form = ref({ ...BUDGET_DEFAULT_VALUES });
 const { recurrenceOptions, findRecurrenceOption } = useRecurrenceOptions();
 const recurrence = ref<RecurrenceOption>(findRecurrenceOption(BUDGET_RECURRENCES.none));
 const isRecurring = computed(() => recurrence.value.value !== BUDGET_RECURRENCES.none);
-const categoriesFieldTouched = ref(false);
+const rules = ref<BudgetRuleGroup[]>([createEmptyRule()]);
+const rulesFieldTouched = ref(false);
 
 const { isPending: isMutating, mutate: createBudgetItem } = useMutation({
   mutationFn: createBudget,
@@ -78,12 +80,10 @@ const { isPending: isMutating, mutate: createBudgetItem } = useMutation({
 
 const isDateExist = computed(() => !!form.value.startDate && !!form.value.endDate);
 const isCategoryBudget = computed(() => form.value.type === BUDGET_TYPES.category);
-const isCategoryValid = computed(() => !isCategoryBudget.value || form.value.categoryIds.length > 0);
+const isCategoryValid = computed(() => !isCategoryBudget.value || getSavableRules({ rules: rules.value }).length > 0);
 const categoryErrorMessage = computed(() => {
-  if (!isCategoryBudget.value) return undefined;
-  if (!categoriesFieldTouched.value) return undefined;
-  if (form.value.categoryIds.length > 0) return undefined;
-  return t('budgets.creation.categoriesRequired');
+  if (!isCategoryBudget.value || !rulesFieldTouched.value || isCategoryValid.value) return undefined;
+  return t('budgets.rules.required');
 });
 // A recurring budget's start date anchors every period, so it can't be left empty.
 const isStartDateValid = computed(() => !isRecurring.value || !!form.value.startDate);
@@ -96,20 +96,21 @@ const submit = () =>
     ...(form.value as any),
     recurrence: recurrence.value.value,
     timezone: getBrowserTimezone(),
+    ...(isCategoryBudget.value && { rules: getSavableRules({ rules: rules.value }), categoryIds: undefined }),
     // Linking every transaction in a range up front only makes sense for a one-off budget.
     autoInclude: isRecurring.value ? false : form.value.autoInclude,
   });
 
-const onCategoriesUpdate = (value: string[]) => {
-  form.value.categoryIds = value;
-  categoriesFieldTouched.value = true;
+const onRulesUpdate = (value: BudgetRuleGroup[]) => {
+  rules.value = value;
+  rulesFieldTouched.value = true;
 };
 
 const onBudgetTypeChange = (type: BUDGET_TYPES) => {
   form.value.type = type;
   // Reset touched state when switching types so user gets a fresh start
   if (type === BUDGET_TYPES.category) {
-    categoriesFieldTouched.value = false;
+    rulesFieldTouched.value = false;
   }
 };
 </script>
@@ -160,12 +161,11 @@ const onBudgetTypeChange = (type: BUDGET_TYPES) => {
       </RadioGroup>
     </div>
 
-    <CategoryMultiSelectField
+    <BudgetRulesEditor
       v-if="isCategoryBudget"
-      :model-value="form.categoryIds"
-      :label="$t('budgets.creation.categoriesLabel')"
+      :model-value="rules"
       :error-message="categoryErrorMessage"
-      @update:model-value="onCategoriesUpdate"
+      @update:model-value="onRulesUpdate"
     />
 
     <div>

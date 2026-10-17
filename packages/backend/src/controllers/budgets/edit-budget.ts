@@ -5,6 +5,7 @@ import { serializeBudget } from '@root/serializers';
 import * as editBudgetService from '@services/budgets/edit-budget';
 import { z } from 'zod';
 
+import { budgetRulesSchema } from './budget-rules-schema';
 import { budgetTimezone } from './budget-timezone';
 
 const schema = z.object({
@@ -15,6 +16,7 @@ const schema = z.object({
     z.object({
       name: z.string().min(1, 'Name is required').max(200, 'Name must not exceed 200 characters').trim().optional(),
       categoryIds: recordArrayIds().optional(),
+      rules: budgetRulesSchema().optional(),
       recurrence: z.nativeEnum(BUDGET_RECURRENCES).optional(),
       timezone: budgetTimezone().nullable().optional(),
       startDate: dateBound({ precision: 'datetime' }).optional(),
@@ -30,13 +32,14 @@ const schema = z.object({
 });
 
 export default createController(schema, async ({ user, params, body }) => {
-  const { name, categoryIds, recurrence, timezone, startDate, endDate, limitAmount, autoInclude } = body;
+  const { name, categoryIds, rules, recurrence, timezone, startDate, endDate, limitAmount, autoInclude } = body;
 
   const budget = await editBudgetService.editBudget({
     id: params.id,
     userId: user.id,
     name,
     categoryIds,
+    rules,
     recurrence,
     timezone,
     startDate,

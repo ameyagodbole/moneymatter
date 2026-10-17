@@ -36,6 +36,9 @@ const isCategoryBudget = computed(() => props.budget.type === BUDGET_TYPES.categ
 const isRecurring = computed(() => props.budget.recurrence !== BUDGET_RECURRENCES.none);
 const summary = computed(() => props.stats?.summary ?? null);
 const categories = computed(() => (props.budget.categories ?? []) as CategoryModel[]);
+const rulesCount = computed(() => props.budget.rules?.length ?? 0);
+// Several rules, or rules with no categories (tags, accounts, payees), read better as a rule count.
+const showRulesCount = computed(() => rulesCount.value > 1 || (rulesCount.value > 0 && !categories.value.length));
 
 const formatDate = (date: Date | string | undefined | null) => {
   if (!date) return null;
@@ -105,8 +108,9 @@ const formatDate = (date: Date | string | undefined | null) => {
               }}
             </span>
             <template v-if="isCategoryBudget">
-              <span v-if="budget.limitAmount && categories.length">·</span>
-              <span v-if="categories.length">
+              <span v-if="budget.limitAmount && (categories.length || showRulesCount)">·</span>
+              <span v-if="showRulesCount">{{ $t('budgets.rules.rulesCount', rulesCount) }}</span>
+              <span v-else-if="categories.length">
                 {{ $t('budgets.list.categoriesCount', { count: categories.length }) }}
               </span>
             </template>

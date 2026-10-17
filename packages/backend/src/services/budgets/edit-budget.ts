@@ -1,16 +1,22 @@
-import { BUDGET_RECURRENCES, BUDGET_TYPES, SHARE_PERMISSIONS } from '@bt/shared/types';
+import {
+  BUDGET_RECURRENCES,
+  BUDGET_TYPES,
+  type BudgetRuleGroup,
+  type RecordId,
+  SHARE_PERMISSIONS,
+} from '@bt/shared/types';
 import { Money } from '@common/types/money';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
 import { t } from '@i18n/index';
 import { ValidationError } from '@js/errors';
-import BudgetCategories from '@models/budget-categories.model';
 import Budgets from '@models/budget.model';
 import Categories from '@models/categories.model';
 import { withTransaction } from '@services/common/with-transaction';
 
 import { authorizeBudgetAccess } from './authorize-budget-access';
 import { normalizeRecurringDates } from './utils/budget-periods';
-import { expandCategoryIds } from './utils/expand-category-ids';
+import { getBudgetRuleGroups, ruleGroupFromCategoryIds } from './utils/budget-rules';
+import { normalizeBudgetRules, syncBudgetCategories } from './utils/normalize-budget-rules';
 
 interface EditBudgetPayload {
   id: string;
@@ -24,9 +30,11 @@ interface EditBudgetPayload {
   limitAmount?: Money;
   autoInclude?: boolean;
   categoryIds?: string[];
+  /** Automatic budgets only: the full new set of rules. */
+  rules?: BudgetRuleGroup[];
 }
 
-export const editBudget = withTransaction(async ({ id, userId, categoryIds, ...params }: EditBudgetPayload) => {
+export const editBudget = withTransaction(async ({ id, userId, categoryIds, rules, ...params }: EditBudgetPayload) => {
   // Manage-level required: metadata edits (name/dates/limit/autoInclude/categories) are
   // owner / manage-only per PRD reduced-write-scope decision. `write` recipients can
   // attach their own transactions but not mutate the budget definition itself, which
@@ -44,26 +52,26 @@ export const editBudget = withTransaction(async ({ id, userId, categoryIds, ...p
 
   await budget.update({ ...params, ...resolveDates({ budget, params }) });
 
-  // Update categories if provided and budget is category-based
-  if (categoryIds !== undefined && budget.type === BUDGET_TYPES.category) {
-    // Remove existing category links
-    await BudgetCategories.destroy({ where: { budgetId: id } });
-
-    // Add new category links (with expansion). Categories are resolved against the
-    // OWNER's category tree, not the caller's — a `manage` recipient cannot inject
-    // categories from their own tree (the budget belongs to the owner's namespace).
-    if (categoryIds.length > 0) {
-      const expandedCategoryIds = await expandCategoryIds({ userId: ownerUserId, categoryIds });
-
-      if (expandedCategoryIds.length) {
-        await BudgetCategories.bulkCreate(
-          expandedCategoryIds.map((categoryId) => ({
-            budgetId: id,
-            categoryId,
-          })),
-        );
-      }
+  // Automatic budgets: `rules` replaces the rules. A plain `categoryIds` list (older
+  // clients) replaces the categories of a single-rule budget; with several rules it
+  // can't say which rule it means, so it has to come as `rules`.
+  if (budget.type === BUDGET_TYPES.category && (rules !== undefined || categoryIds !== undefined)) {
+    const current = getBudgetRuleGroups({ rules: budget.rules, categoryIds: [] });
+    if (rules === undefined && current.length > 1) {
+      throw new ValidationError({ message: t({ key: 'budgets.editRulesNotCategories' }) });
     }
+
+    // Categories are resolved against the OWNER's category tree, not the caller's — a
+    // `manage` recipient cannot inject categories from their own tree.
+    const nextRules = await normalizeBudgetRules({
+      userId: ownerUserId,
+      groups: rules ?? [
+        { ...(current[0] ?? ruleGroupFromCategoryIds({ categoryIds: [] })), categoryIds: categoryIds as RecordId[] },
+      ],
+    });
+
+    await budget.update({ rules: nextRules });
+    await syncBudgetCategories({ budgetId: budget.id, groups: nextRules });
   }
 
   const updatedBudget = await Budgets.findOne({

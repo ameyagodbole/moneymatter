@@ -150,3 +150,25 @@ Per-period limit overrides, rollover, manual links on category budgets, tag rule
   counts the remainder, as the global stats do.
 - **One detail page.** `budget-info.vue` replaces the separate category and manual pages. Category budgets list
   each row's source ("Added by hand"), with exclude / remove actions and an "Excluded" section to restore from.
+
+## Step 3: rules for automatic budgets
+
+Automatic (`type: category`) budgets match by **rules** (`Budgets.rules`, JSONB, `BudgetRuleGroup[]`). A rule has
+optional lists of categories, tags (with `tagMatch: any | all`), accounts and payees.
+
+- Every condition that is filled in must hold for a rule to match; a transaction counts when **any** rule matches.
+- A rule **with categories** counts only the matching parts of a split transaction (the remainder on the
+  transaction's own category, and each matching split). A rule **without categories** (tags, account or payee only)
+  counts the whole transaction. Parts matched by several rules count once.
+- Tags, account and payee are checked on the transaction, so "category = Household and tag = Vacation" counts the
+  Household split of a Vacation-tagged purchase.
+- On save, ids are checked against the owner's data, parent categories are expanded to their children, and empty
+  rules are dropped. `BudgetCategories` is kept equal to the categories the rules name, for chips, export and
+  category-delete cleanup; matching reads `rules`.
+- Existing category budgets were migrated to one categories-only rule. A plain `categoryIds` on create still means
+  one rule; on edit it replaces the categories of a single-rule budget and is rejected for multi-rule budgets.
+- The matching runs as one candidate query (the OR of the rules, with subqueries for split categories and tags),
+  then `matchRuleGroups` settles `tagMatch: all` and which parts count on the loaded rows.
+- Backup restore remaps the ids inside `rules`. MCP `create_budget` / `update_budget` accept `rules`.
+- The create and edit forms have a rule editor; the detail page shows the rules as "in Food and tagged #vacation",
+  with "or" between rules. Category budgets are now labelled "Automatic".

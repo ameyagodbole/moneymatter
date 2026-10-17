@@ -1,4 +1,4 @@
-import { BUDGET_RECURRENCES, BUDGET_TYPES, BudgetModel, endpointsTypes } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_TYPES, BudgetModel, type BudgetRuleGroup, endpointsTypes } from '@bt/shared/types';
 import addTransactionsToBudget from '@controllers/budgets/add-transaction-to-budget';
 import removeTransactionsFromBudget from '@controllers/budgets/remove-transaction-from-budget';
 import type { serializeBudgetPeriods } from '@root/serializers';
@@ -17,6 +17,7 @@ interface TestCreateBudgetPayload {
   recurrence?: BUDGET_RECURRENCES;
   timezone?: string | null;
   categoryIds?: string[];
+  rules?: Partial<BudgetRuleGroup>[];
   startDate?: string | Date | null;
   endDate?: string | Date | null;
   autoInclude?: boolean;
@@ -26,6 +27,7 @@ interface TestCreateBudgetPayload {
 interface EditBudgetPayload {
   name?: string;
   categoryIds?: string[];
+  rules?: Partial<BudgetRuleGroup>[];
   recurrence?: BUDGET_RECURRENCES;
   timezone?: string | null;
   startDate?: string;

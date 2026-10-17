@@ -22,6 +22,25 @@ const inputSchema = {
       'Budget type: manual (transactions linked explicitly) or category (auto-tracks by category). Default: manual',
     ),
   categoryIds: z.array(recordId()).optional().describe('Category IDs to link (only used when type is "category")'),
+  rules: z
+    .array(
+      z.object({
+        categoryIds: z.array(recordId()).default([]).describe('Categories (parents include their children)'),
+        tagIds: z.array(recordId()).default([]).describe('Tags'),
+        tagMatch: z
+          .enum(['any', 'all'])
+          .default('any')
+          .describe('Whether the transaction needs any or all of the tags'),
+        accountIds: z.array(recordId()).default([]).describe('Accounts'),
+        payeeIds: z.array(recordId()).default([]).describe('Payees'),
+      }),
+    )
+    .min(1)
+    .max(20)
+    .optional()
+    .describe(
+      'Category budgets only: matching rules. A transaction counts when any rule matches; a rule matches when all its non-empty conditions hold. A rule with categories counts only the matching parts of a split transaction; a rule without categories counts the whole transaction. Overrides categoryIds.',
+    ),
   recurrence: z
     .enum([
       BUDGET_RECURRENCES.none,
@@ -69,6 +88,7 @@ export function registerCreateBudget(server: McpServer) {
         status: args.status ?? BUDGET_STATUSES.active,
         type: args.type,
         categoryIds: args.categoryIds,
+        rules: args.rules,
         recurrence: args.recurrence,
         timezone: args.timezone,
         startDate: args.startDate ? new Date(args.startDate) : undefined,
