@@ -12,6 +12,8 @@ import { useQuery } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 
+import BudgetFitCard from './budget-fit-card.vue';
+import { computeBudgetFit } from './budget-fit';
 import BudgetPaceCard from './budget-pace-card.vue';
 import { computeBudgetPace } from './budget-pace';
 import BudgetPeriodChart from './budget-period-chart.vue';
@@ -91,19 +93,21 @@ const spentChange = computed(() =>
 );
 
 const cumulativeCurrent = computed(() =>
-  periodsData.value
+  periodsData.value && selected.value
     ? toCumulativeChartData({
         steps: periodsData.value.cumulative.current,
         granularity: periodsData.value.cumulative.granularity,
+        labelStart: selected.value.periodStart,
         format,
       })
     : [],
 );
 const cumulativePrevious = computed(() =>
-  periodsData.value
+  periodsData.value && selected.value
     ? toCumulativeChartData({
         steps: periodsData.value.cumulative.previous,
         granularity: periodsData.value.cumulative.granularity,
+        labelStart: selected.value.periodStart,
         format,
       })
     : [],
@@ -127,6 +131,10 @@ const pace = computed(() =>
       })
     : null,
 );
+
+// Over / under per finished period, and whether the limit matches real spending.
+const fit = computed(() => computeBudgetFit({ periods: periods.value }));
+const hasAnyLimit = computed(() => periods.value.some((period) => period.limitAmount !== null));
 
 const selectPeriod = ({ periodStart }: { periodStart: string }) => emit('update:at', new Date(periodStart));
 </script>
@@ -165,6 +173,8 @@ const selectPeriod = ({ periodStart }: { periodStart: string }) => emit('update:
       </div>
 
       <BudgetPaceCard v-if="pace && selected?.limitAmount" :pace="pace" :limit="selected.limitAmount" />
+
+      <BudgetFitCard v-if="!isLoadingPeriods && hasAnyLimit" :fit="fit" :recurrence="recurrence" />
 
       <!-- Spending per period against the limit -->
       <ChartSkeleton v-if="isLoadingPeriods" />
