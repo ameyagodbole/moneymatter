@@ -62,6 +62,10 @@
           <span class="inline-block w-3 border-t-2 border-dashed" :style="{ borderColor: AVERAGE_LINE_COLOR }"></span>
           <span class="text-muted-foreground">{{ $t('budgets.recurring.averageSpent') }}</span>
         </div>
+        <!-- Without this, a missing average line after a start-date change looks broken. -->
+        <span v-else class="text-muted-foreground/70 italic">
+          {{ $t('budgets.recurring.averageNeedsPeriods', { count: MIN_PERIODS_FOR_AVERAGE }) }}
+        </span>
       </div>
     </div>
   </div>

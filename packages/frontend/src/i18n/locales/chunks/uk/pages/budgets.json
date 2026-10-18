@@ -107,6 +107,7 @@
       "vsPreviousPeriod": "порівняно з попереднім періодом",
       "previousPeriod": "Попередній період",
       "averageSpent": "Середні витрати",
+      "averageNeedsPeriods": "Середнє значення з'явиться, коли завершених періодів буде не менше ніж {count}",
       "limitUsed": "Використано ліміту",
       "previousPeriodButton": "Попередній період",
       "nextPeriodButton": "Наступний період",

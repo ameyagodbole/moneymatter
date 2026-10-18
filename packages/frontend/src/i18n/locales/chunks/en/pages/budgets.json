@@ -107,6 +107,7 @@
       "vsPreviousPeriod": "vs previous period",
       "previousPeriod": "Previous period",
       "averageSpent": "Average spent",
+      "averageNeedsPeriods": "Average appears after {count} finished periods",
       "limitUsed": "Limit used",
       "previousPeriodButton": "Previous period",
       "nextPeriodButton": "Next period",
