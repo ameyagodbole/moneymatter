@@ -25,7 +25,6 @@
             />
             <template v-if="tooltip.limitAmount !== null">
               <ChartTooltipRow
-                :color="AVERAGE_LINE_COLOR"
                 :label="$t('budgets.recurring.limit')"
                 :value="formatBaseCurrency(tooltip.limitAmount)"
               />
@@ -34,6 +33,11 @@
                 :label="$t('budgets.recurring.used')"
                 :value="`${Math.round(tooltip.utilizationRate ?? 0)}%`"
                 :value-class="tooltip.isOverLimit ? 'text-destructive-text' : undefined"
+              />
+              <ChartTooltipRow
+                :label="tooltip.isOverLimit ? $t('budgets.fit.overLabel') : $t('budgets.fit.underLabel')"
+                :value="formatBaseCurrency(Math.abs(tooltip.spent - (tooltip.limitAmount ?? 0)))"
+                :value-class="tooltip.isOverLimit ? 'text-destructive-text' : 'text-success-text'"
               />
             </template>
           </ChartTooltip>
@@ -51,8 +55,12 @@
           <span class="text-muted-foreground">{{ $t('budgets.recurring.overLimit') }}</span>
         </div>
         <div v-if="hasLimit" class="flex items-center gap-1.5">
-          <span class="inline-block h-0.5 w-3" :style="{ background: AVERAGE_LINE_COLOR }"></span>
+          <span class="border-foreground/70 inline-block w-3 border-t-[1.5px] border-dashed"></span>
           <span class="text-muted-foreground">{{ $t('budgets.recurring.limit') }}</span>
+        </div>
+        <div v-if="averageSpent !== null" class="flex items-center gap-1.5">
+          <span class="inline-block w-3 border-t-2 border-dashed" :style="{ borderColor: AVERAGE_LINE_COLOR }"></span>
+          <span class="text-muted-foreground">{{ $t('budgets.recurring.averageSpent') }}</span>
         </div>
       </div>
     </div>
@@ -82,6 +90,10 @@ import { useI18n } from 'vue-i18n';
 import { formatBudgetPeriodLabel } from './budget-period-utils';
 
 const MAX_BAR_WIDTH = 60;
+const LIMIT_LINE_WIDTH = 1.5;
+const LIMIT_DASH = '3,3';
+/** The average line needs at least this many finished periods to say anything. */
+const MIN_PERIODS_FOR_AVERAGE = 2;
 const UNSELECTED_BAR_OPACITY = 0.55;
 
 const props = defineProps<{
@@ -127,6 +139,14 @@ const colors = computed(() => {
     within: readCssColor({ name: '--primary', fallback: 'rgb(59, 130, 246)' }),
     over: readCssColor({ name: '--destructive-text', fallback: 'rgb(239, 68, 68)' }),
   };
+});
+
+// Finished periods only: the current one is still filling up and would drag the average down.
+const averageSpent = computed(() => {
+  const now = new Date();
+  const finished = props.periods.filter((period) => new Date(period.periodEnd) < now);
+  if (finished.length < MIN_PERIODS_FOR_AVERAGE) return null;
+  return finished.reduce((sum, period) => sum + period.spent, 0) / finished.length;
 });
 
 const isOverLimit = (period: BudgetPeriodTotals) => period.limitAmount !== null && period.spent > period.limitAmount;
@@ -270,23 +290,47 @@ const renderChart = () => {
       .attr('x2', (p) => (xScale(p.periodStart) ?? 0) + barOffset + barWidth + 4)
       .attr('y1', (p) => yScale(p.limitAmount!))
       .attr('y2', (p) => yScale(p.limitAmount!))
-      .attr('stroke', AVERAGE_LINE_COLOR)
-      .attr('stroke-width', 2.5)
-      .attr('stroke-dasharray', '4,3')
+      .attr('stroke', text)
+      .attr('stroke-width', LIMIT_LINE_WIDTH)
+      .attr('stroke-dasharray', LIMIT_DASH)
       .style('pointer-events', 'none');
   } else if (limits.length) {
-    // The same limit every period reads as one reference line. Drawn after the bars so
-    // an over-limit bar still shows where the limit sits.
+    // The same limit every period reads as one reference line, labelled on the left so it
+    // doesn't collide with the average line's label on the right.
+    const y = yScale(limits[0]!);
+    g.append('line')
+      .attr('x1', 0)
+      .attr('x2', innerWidth)
+      .attr('y1', y)
+      .attr('y2', y)
+      .attr('stroke', text)
+      .attr('stroke-width', LIMIT_LINE_WIDTH)
+      .attr('stroke-dasharray', LIMIT_DASH)
+      .style('pointer-events', 'none');
+    g.append('text')
+      .attr('x', 4)
+      .attr('y', y - 6)
+      .attr('fill', text)
+      .attr('font-size', '11px')
+      .attr('font-weight', 600)
+      .style('pointer-events', 'none')
+      .text(`${t('budgets.recurring.limit')}: ${formatBaseCurrency(limits[0]!)}`);
+  }
+
+  // Average spend of the finished periods, in the amber dashed style every chart uses for averages.
+  if (averageSpent.value !== null) {
     renderAverageLine({
       g,
       innerWidth,
-      y: yScale(limits[0]!),
-      label: `${t('budgets.recurring.limit')}: ${formatBaseCurrency(limits[0]!)}`,
+      y: yScale(averageSpent.value),
+      label: `${t('budgets.recurring.averageSpent')}: ${formatBaseCurrency(averageSpent.value)}`,
       labelBackground: card,
     });
   }
 };
 
 useResizeObserver(containerRef, () => renderChart());
-watch([() => props.periods, () => props.selectedIndex, currentTheme], () => renderChart(), { flush: 'post' });
+watch([() => props.periods, () => props.selectedIndex, averageSpent, currentTheme], () => renderChart(), {
+  flush: 'post',
+});
 </script>
