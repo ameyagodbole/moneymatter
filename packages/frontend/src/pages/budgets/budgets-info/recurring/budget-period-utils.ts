@@ -1,6 +1,6 @@
 import type { BudgetCumulativeStep, BudgetPeriod, BudgetPeriodsResponse } from '@/api/budgets';
 import { BUDGET_RECURRENCES, type RecordId, type endpointsTypes } from '@bt/shared/types';
-import { getDate, getMonth, getYear } from 'date-fns';
+import { addDays, addMonths, addWeeks, getDate, getMonth, getYear } from 'date-fns';
 
 /** Locale-aware date-fns `format`, as returned by `useDateLocale()`. */
 type FormatDate = (date: Date | number, formatStr: string) => string;
@@ -74,24 +74,32 @@ const STEP_LABEL_FORMATS: Record<Granularity, string> = {
   month: 'LLL',
 };
 
+const STEP_ADVANCE: Record<Granularity, (date: Date, amount: number) => Date> = {
+  day: addDays,
+  week: addWeeks,
+  month: addMonths,
+};
+
 /**
  * Running totals in the shape the Trends `CumulativeChart` takes. Its "month" axis is
- * just a position, so steps of any size fit; the label carries the real date. The
- * previous period is labelled by its own dates and aligned with the current one by
- * step number.
+ * just a position, so steps of any size fit. Every step is labelled from `labelStart`
+ * (the selected period's start), so the previous period lines up under the selected
+ * period's dates instead of its own: step 18 reads "Oct 18" on both lines.
  */
 export const toCumulativeChartData = ({
   steps,
   granularity,
+  labelStart,
   format,
 }: {
   steps: BudgetCumulativeStep[];
   granularity: Granularity;
+  labelStart: Date | string;
   format: FormatDate;
 }): endpointsTypes.CumulativeMonthData[] =>
   steps.map((step) => ({
     month: step.step,
-    monthLabel: format(new Date(step.stepStart), STEP_LABEL_FORMATS[granularity]),
+    monthLabel: format(STEP_ADVANCE[granularity](new Date(labelStart), step.step - 1), STEP_LABEL_FORMATS[granularity]),
     value: step.value,
     periodValue: step.periodValue,
   }));

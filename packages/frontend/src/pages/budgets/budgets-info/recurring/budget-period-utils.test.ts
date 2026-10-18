@@ -87,13 +87,14 @@ describe('hasNextPeriod', () => {
 });
 
 describe('toCumulativeChartData', () => {
-  it('maps steps to chart points labelled by their own dates', () => {
+  it('maps steps to chart points labelled by the selected period', () => {
     const data = toCumulativeChartData({
       steps: [
         { step: 1, stepStart: local(2026, 10, 1), value: 0, periodValue: 0 },
         { step: 2, stepStart: local(2026, 10, 2), value: 40, periodValue: 40 },
       ],
       granularity: 'day',
+      labelStart: local(2026, 10, 1),
       format,
     });
 
@@ -101,6 +102,17 @@ describe('toCumulativeChartData', () => {
       { month: 1, monthLabel: 'Oct 1', value: 0, periodValue: 0 },
       { month: 2, monthLabel: 'Oct 2', value: 40, periodValue: 40 },
     ]);
+  });
+
+  it("labels the previous period with the selected period's dates", () => {
+    const data = toCumulativeChartData({
+      steps: [{ step: 18, stepStart: local(2026, 9, 18), value: 300, periodValue: 10 }],
+      granularity: 'day',
+      labelStart: local(2026, 10, 1),
+      format,
+    });
+
+    expect(data[0]!.monthLabel).toBe('Oct 18');
   });
 });
 

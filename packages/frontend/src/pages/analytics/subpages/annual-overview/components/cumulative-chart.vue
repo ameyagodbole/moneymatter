@@ -60,6 +60,7 @@ import { ChartTooltip, ChartTooltipHeader, ChartTooltipRow } from '@/components/
 import { useFormatCurrency } from '@/composable';
 import { getChartColors } from '@/composable/charts/chart-colors';
 import { formatAxisCurrency } from '@/composable/charts/format-axis-currency';
+import { pickAxisTicks } from '@/composable/charts/pick-axis-ticks';
 import { useChartTooltipPosition } from '@/composable/charts/use-chart-tooltip-position';
 import type { endpointsTypes } from '@bt/shared/types';
 import * as d3 from 'd3';
@@ -207,7 +208,7 @@ const renderChart = () => {
     .call(
       d3
         .axisBottom(xScale)
-        .tickValues(sortedMonths)
+        .tickValues(pickAxisTicks({ values: sortedMonths, width: innerWidth }))
         .tickFormat((d) => monthsInPeriod.get(d as number) || ''),
     )
     .call((axis) => {
