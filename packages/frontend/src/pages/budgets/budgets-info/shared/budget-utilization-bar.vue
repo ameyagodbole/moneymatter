@@ -7,6 +7,8 @@ const { t } = useI18n();
 
 defineProps<{
   limitAmount: number;
+  /** What the previous period carried into this limit; negative when overspending was taken off. */
+  rolledOverAmount?: number;
   stats: {
     balance: number;
     utilizationRate: number | null;
@@ -31,6 +33,13 @@ const { formatBaseCurrency } = useFormatCurrency();
             <span class="font-medium text-white">{{ formatBaseCurrency(limitAmount) }}</span>
           </template>
         </i18n-t>
+        <p v-if="rolledOverAmount" class="text-muted-foreground mt-0.5 text-xs">
+          {{
+            rolledOverAmount > 0
+              ? t('budgets.rollover.includesCarried', { amount: formatBaseCurrency(rolledOverAmount) })
+              : t('budgets.rollover.includesDeducted', { amount: formatBaseCurrency(-rolledOverAmount) })
+          }}
+        </p>
       </div>
       <span :class="['text-2xl font-semibold tabular-nums', utilizationTextColor]">
         {{

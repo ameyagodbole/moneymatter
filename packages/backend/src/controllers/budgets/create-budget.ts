@@ -1,4 +1,4 @@
-import { BUDGET_RECURRENCES, BUDGET_STATUSES, BUDGET_TYPES } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_ROLLOVERS, BUDGET_STATUSES, BUDGET_TYPES } from '@bt/shared/types';
 import { dateBound, decimalMoney, recordArrayIds, withDateOrder } from '@common/lib/zod/custom-types';
 import { createController } from '@controllers/helpers/controller-factory';
 import { serializeBudget } from '@root/serializers';
@@ -15,6 +15,7 @@ const schema = z.object({
         name: z.string().min(1, 'Name is required').max(200, 'The name must not exceed 200 characters').trim(),
         type: z.nativeEnum(BUDGET_TYPES).optional().default(BUDGET_TYPES.manual),
         recurrence: z.nativeEnum(BUDGET_RECURRENCES).optional().default(BUDGET_RECURRENCES.none),
+        rollover: z.nativeEnum(BUDGET_ROLLOVERS).optional().default(BUDGET_ROLLOVERS.none),
         timezone: budgetTimezone().nullable().optional(),
         categoryIds: recordArrayIds().optional(),
         rules: budgetRulesSchema().optional(),
@@ -44,7 +45,19 @@ const schema = z.object({
 
 export default createController(schema, async ({ user, body }) => {
   const { id: userId } = user;
-  const { name, type, recurrence, timezone, categoryIds, rules, startDate, endDate, autoInclude, limitAmount } = body;
+  const {
+    name,
+    type,
+    recurrence,
+    rollover,
+    timezone,
+    categoryIds,
+    rules,
+    startDate,
+    endDate,
+    autoInclude,
+    limitAmount,
+  } = body;
 
   const budget = await budgetsService.createBudget({
     name,
@@ -52,6 +65,7 @@ export default createController(schema, async ({ user, body }) => {
     status: BUDGET_STATUSES.active,
     type,
     recurrence,
+    rollover,
     timezone,
     categoryIds,
     rules,

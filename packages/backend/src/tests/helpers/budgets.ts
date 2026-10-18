@@ -1,4 +1,11 @@
-import { BUDGET_RECURRENCES, BUDGET_TYPES, BudgetModel, type BudgetRuleGroup, endpointsTypes } from '@bt/shared/types';
+import {
+  BUDGET_RECURRENCES,
+  BUDGET_ROLLOVERS,
+  BUDGET_TYPES,
+  BudgetModel,
+  type BudgetRuleGroup,
+  endpointsTypes,
+} from '@bt/shared/types';
 import addTransactionsToBudget from '@controllers/budgets/add-transaction-to-budget';
 import removeTransactionsFromBudget from '@controllers/budgets/remove-transaction-from-budget';
 import type { serializeBudgetPeriods } from '@root/serializers';
@@ -15,6 +22,7 @@ interface TestCreateBudgetPayload {
   status?: string;
   type?: BUDGET_TYPES;
   recurrence?: BUDGET_RECURRENCES;
+  rollover?: BUDGET_ROLLOVERS;
   timezone?: string | null;
   categoryIds?: string[];
   rules?: Partial<BudgetRuleGroup>[];
@@ -29,6 +37,7 @@ interface EditBudgetPayload {
   categoryIds?: string[];
   rules?: Partial<BudgetRuleGroup>[];
   recurrence?: BUDGET_RECURRENCES;
+  rollover?: BUDGET_ROLLOVERS;
   timezone?: string | null;
   startDate?: string;
   endDate?: string | null;

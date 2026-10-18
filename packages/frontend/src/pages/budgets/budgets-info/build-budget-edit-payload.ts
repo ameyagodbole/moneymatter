@@ -1,7 +1,9 @@
-import { BUDGET_RECURRENCES, type BudgetRuleGroup } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_ROLLOVERS, type BudgetRuleGroup } from '@bt/shared/types';
 
 export interface BudgetSchedule {
   recurrence: BUDGET_RECURRENCES;
+  /** Only meaningful for recurring budgets; sent as `none` for one-off ones. */
+  rollover: BUDGET_ROLLOVERS;
   startDate: Date | null;
   endDate: Date | null;
 }
@@ -24,6 +26,7 @@ export interface BudgetEditPayload {
   rules?: BudgetRuleGroup[];
   limitAmount?: number;
   recurrence?: BUDGET_RECURRENCES;
+  rollover?: BUDGET_ROLLOVERS;
   timezone?: string;
   startDate?: string;
   endDate?: string | null;
@@ -57,6 +60,7 @@ export const buildBudgetEditPayload = ({
 
   if (schedule) {
     payload.recurrence = schedule.recurrence;
+    payload.rollover = schedule.recurrence === BUDGET_RECURRENCES.none ? BUDGET_ROLLOVERS.none : schedule.rollover;
     if (timezone) payload.timezone = timezone;
 
     if (schedule.recurrence !== BUDGET_RECURRENCES.none) {

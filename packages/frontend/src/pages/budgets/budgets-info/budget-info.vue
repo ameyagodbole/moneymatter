@@ -311,7 +311,8 @@ watch(
 
     <BudgetUtilizationBar
       v-if="budgetData.limitAmount"
-      :limit-amount="budgetData.limitAmount"
+      :limit-amount="budgetStats?.summary.limitAmount ?? budgetData.limitAmount"
+      :rolled-over-amount="budgetStats?.summary.rolledOverAmount ?? 0"
       :stats="stats"
       :utilization-color="utilizationColor"
       :utilization-text-color="utilizationTextColor"

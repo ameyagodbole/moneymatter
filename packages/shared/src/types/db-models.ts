@@ -6,6 +6,7 @@ import {
   AccessSource,
   BANK_PROVIDER_TYPE,
   BUDGET_RECURRENCES,
+  BUDGET_ROLLOVERS,
   BUDGET_TYPES,
   CATEGORIZATION_MODE,
   LogoResolutionState,
@@ -429,6 +430,8 @@ export interface BudgetModel {
   recurrence: BUDGET_RECURRENCES;
   /** IANA zone the periods are cut in. Null means UTC. */
   timezone?: string | null;
+  /** Recurring budgets with a limit: what carries into the next period. */
+  rollover?: BUDGET_ROLLOVERS;
   /** For recurring budgets, the start of the first period. Its calendar day anchors every later period. */
   startDate?: Date;
   /** For recurring budgets, the end of the last period, or unset when the budget repeats until archived. */

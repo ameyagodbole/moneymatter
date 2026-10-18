@@ -172,3 +172,27 @@ optional lists of categories, tags (with `tagMatch: any | all`), accounts and pa
 - Backup restore remaps the ids inside `rules`. MCP `create_budget` / `update_budget` accept `rules`.
 - The create and edit forms have a rule editor; the detail page shows the rules as "in Food and tagged #vacation",
   with "or" between rules. Category budgets are now labelled "Automatic".
+
+## Step 4: pace, overview, alerts and rollover
+
+- **Rollover** (`Budgets.rollover`: `none | surplus | all`, recurring budgets with a limit). Each period's limit is
+  the base limit plus what the previous period carried: with `surplus` only unspent limit carries; with `all`
+  overspending carries too, so a period can start below the base limit. Limits depend on every earlier period, so
+  with rollover on, spending is collected from the first period. `/stats` returns the period's `limitAmount` and
+  `rolledOverAmount`; `/periods` returns each period's own limit, and the chart marks the limit per bar when they
+  differ.
+- **Alerts.** An hourly cron (`budget-alerts-check`, :20 UTC, production only) notifies the owner when spending
+  reaches 80% and then 100% of the limit: the current period for recurring budgets, the date range for one-off ones.
+  Each threshold fires once per period (tracked in `Budgets.alertState`); jumping past both sends only the 100% one.
+  It honours the existing "budget alerts" notification setting and skips archived, ended and limitless budgets.
+  Notifications reuse the existing `budget_alert` type, which already links to the budget.
+- **Pace** (current period only): spending against an even pace through the period, the projected total at the
+  current rate, and what's left per remaining day.
+- **This period overview** on the budget list: spent against limits per cadence (monthly, quarterly and yearly are
+  never added together), with how many budgets are over.
+
+## Known gaps
+
+- The CSV data export has no recurrence, rules or rollover columns.
+- `CumulativeChart` shows no limit line.
+- Matching rule ids that point at deleted tags, accounts or payees are kept in `rules` and simply match nothing.

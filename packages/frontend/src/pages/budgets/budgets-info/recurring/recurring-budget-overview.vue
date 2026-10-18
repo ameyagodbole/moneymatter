@@ -12,6 +12,8 @@ import { useQuery } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 
+import BudgetPaceCard from './budget-pace-card.vue';
+import { computeBudgetPace } from './budget-pace';
 import BudgetPeriodChart from './budget-period-chart.vue';
 import {
   getAdjacentPeriodAt,
@@ -114,6 +116,18 @@ const previousCategories = computed(() =>
   toCategoryBreakdownData({ spendingsByCategory: previousSpending.value?.spendingsByCategory }),
 );
 
+// Pace only means something for the period running now.
+const pace = computed(() =>
+  selected.value
+    ? computeBudgetPace({
+        periodStart: selected.value.periodStart,
+        periodEnd: selected.value.periodEnd,
+        spent: selected.value.spent,
+        limit: selected.value.limitAmount,
+      })
+    : null,
+);
+
 const selectPeriod = ({ periodStart }: { periodStart: string }) => emit('update:at', new Date(periodStart));
 </script>
 
@@ -149,6 +163,8 @@ const selectPeriod = ({ periodStart }: { periodStart: string }) => emit('update:
           />
         </template>
       </div>
+
+      <BudgetPaceCard v-if="pace && selected?.limitAmount" :pace="pace" :limit="selected.limitAmount" />
 
       <!-- Spending per period against the limit -->
       <ChartSkeleton v-if="isLoadingPeriods" />

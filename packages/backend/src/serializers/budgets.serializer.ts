@@ -5,7 +5,13 @@
  * Money fields auto-convert via .toNumber().
  * Deserializers convert API decimal inputs to Money.
  */
-import { BUDGET_RECURRENCES, BUDGET_TYPES, type BudgetRuleGroup, ResourceShareInfo } from '@bt/shared/types';
+import {
+  BUDGET_RECURRENCES,
+  BUDGET_ROLLOVERS,
+  BUDGET_TYPES,
+  type BudgetRuleGroup,
+  ResourceShareInfo,
+} from '@bt/shared/types';
 import { Money, centsToApiDecimal, centsToApiDecimalOrNull } from '@common/types/money';
 import type Budgets from '@models/budget.model';
 import type { BudgetShareContext } from '@services/sharing/get-shared-budgets.service';
@@ -28,6 +34,7 @@ interface BudgetApiResponse {
   status: string;
   type: BUDGET_TYPES;
   recurrence: BUDGET_RECURRENCES;
+  rollover: BUDGET_ROLLOVERS;
   timezone: string | null;
   startDate: Date | null;
   endDate: Date | null;
@@ -62,6 +69,7 @@ export function serializeBudget(budget: Budgets & { _shareContext?: BudgetShareC
     status: budget.status,
     type: budget.type,
     recurrence: budget.recurrence,
+    rollover: budget.rollover,
     timezone: budget.timezone,
     startDate: budget.startDate,
     endDate: budget.endDate,
@@ -114,6 +122,9 @@ interface BudgetStatsApiResponse {
     transactionsCount: number;
     firstTransactionDate: string | null;
     lastTransactionDate: string | null;
+    /** The limit this period is measured against, rollover included. */
+    limitAmount: number | null;
+    rolledOverAmount: number;
   };
 }
 
@@ -127,6 +138,8 @@ interface BudgetStatsInternal {
     transactionsCount: number;
     firstTransactionDate: string | null;
     lastTransactionDate: string | null;
+    limitAmount: number | null; // cents
+    rolledOverAmount: number; // cents
   };
 }
 
@@ -144,6 +157,8 @@ export function serializeBudgetStats(stats: BudgetStatsInternal): BudgetStatsApi
       transactionsCount: stats.summary.transactionsCount,
       firstTransactionDate: stats.summary.firstTransactionDate,
       lastTransactionDate: stats.summary.lastTransactionDate,
+      limitAmount: centsToApiDecimalOrNull(stats.summary.limitAmount),
+      rolledOverAmount: centsToApiDecimal(stats.summary.rolledOverAmount),
     },
   };
 }

@@ -1,4 +1,11 @@
-import { BUDGET_RECURRENCES, BUDGET_STATUSES, BUDGET_TYPES, type BudgetRuleGroup, RecordId } from '@bt/shared/types';
+import {
+  BUDGET_RECURRENCES,
+  BUDGET_ROLLOVERS,
+  BUDGET_STATUSES,
+  BUDGET_TYPES,
+  type BudgetRuleGroup,
+  RecordId,
+} from '@bt/shared/types';
 import { IdColumn } from '@common/types/id-column';
 import { Money } from '@common/types/money';
 import { MoneyField } from '@common/types/money-column';
@@ -40,6 +47,14 @@ export default class Budgets extends Model {
   /** IANA zone the periods are cut in. Null means UTC. */
   @Column({ allowNull: true, type: DataType.STRING(64) })
   timezone!: string | null;
+
+  /** Recurring budgets with a limit: what carries into the next period. */
+  @Column({ allowNull: false, defaultValue: BUDGET_ROLLOVERS.none, type: DataType.STRING(20) })
+  rollover!: BUDGET_ROLLOVERS;
+
+  /** Limit alerts already sent: for which period (`periodStart`, or `once` for one-off budgets) and at which thresholds. */
+  @Column({ allowNull: true, type: DataType.JSONB })
+  alertState!: { periodKey: string; notifiedThresholds: number[] } | null;
 
   @Column({ type: DataType.DATE, allowNull: true })
   startDate!: Date;

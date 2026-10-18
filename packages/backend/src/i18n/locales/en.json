@@ -113,7 +113,13 @@
     "notCategoryBudget": "This endpoint is only available for category-based budgets",
     "exclusionsOnlyForCategoryBudgets": "Only category budgets have matched transactions to exclude. Unlink transactions from a manual budget instead",
     "recurringRequiresStartDate": "Recurring budgets need a start date",
-    "notRecurringBudget": "This endpoint is only available for recurring budgets"
+    "notRecurringBudget": "This endpoint is only available for recurring budgets",
+    "alerts": {
+      "nearLimitTitle": "{{budgetName}} is close to its limit",
+      "nearLimitMessage": "You've used {{percent}}% of the {{budgetName}} budget",
+      "overLimitTitle": "{{budgetName}} is over its limit",
+      "overLimitMessage": "You've used {{percent}}% of the {{budgetName}} budget"
+    }
   },
   "tags": {
     "tagNotFound": "Tag not found",

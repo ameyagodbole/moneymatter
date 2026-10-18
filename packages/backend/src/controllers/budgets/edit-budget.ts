@@ -1,4 +1,4 @@
-import { BUDGET_RECURRENCES } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_ROLLOVERS } from '@bt/shared/types';
 import { dateBound, decimalMoney, recordId, recordArrayIds, withDateOrder } from '@common/lib/zod/custom-types';
 import { createController } from '@controllers/helpers/controller-factory';
 import { serializeBudget } from '@root/serializers';
@@ -18,6 +18,7 @@ const schema = z.object({
       categoryIds: recordArrayIds().optional(),
       rules: budgetRulesSchema().optional(),
       recurrence: z.nativeEnum(BUDGET_RECURRENCES).optional(),
+      rollover: z.nativeEnum(BUDGET_ROLLOVERS).optional(),
       timezone: budgetTimezone().nullable().optional(),
       startDate: dateBound({ precision: 'datetime' }).optional(),
       // `null` clears the end date (a recurring budget then repeats until archived).
@@ -32,7 +33,8 @@ const schema = z.object({
 });
 
 export default createController(schema, async ({ user, params, body }) => {
-  const { name, categoryIds, rules, recurrence, timezone, startDate, endDate, limitAmount, autoInclude } = body;
+  const { name, categoryIds, rules, recurrence, rollover, timezone, startDate, endDate, limitAmount, autoInclude } =
+    body;
 
   const budget = await editBudgetService.editBudget({
     id: params.id,
@@ -41,6 +43,7 @@ export default createController(schema, async ({ user, params, body }) => {
     categoryIds,
     rules,
     recurrence,
+    rollover,
     timezone,
     startDate,
     endDate,

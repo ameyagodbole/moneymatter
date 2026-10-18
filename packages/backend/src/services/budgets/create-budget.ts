@@ -1,5 +1,6 @@
 import {
   BUDGET_RECURRENCES,
+  BUDGET_ROLLOVERS,
   BUDGET_STATUSES,
   BUDGET_TYPES,
   type BudgetRuleGroup,
@@ -26,6 +27,7 @@ interface CreateBudgetPayload {
   status: string;
   type?: BUDGET_TYPES;
   recurrence?: BUDGET_RECURRENCES;
+  rollover?: BUDGET_ROLLOVERS;
   timezone?: string | null;
   categoryIds?: string[];
   /** Automatic budgets only. Takes precedence over `categoryIds`. */
@@ -64,6 +66,7 @@ export const createBudget = withTransaction(async (payload: CreateBudgetPayload)
     status: payload.status || BUDGET_STATUSES.active,
     type: budgetType,
     recurrence,
+    rollover: payload.rollover ?? BUDGET_ROLLOVERS.none,
     timezone,
     startDate,
     endDate,
@@ -130,6 +133,7 @@ const createBudgetModel = async ({
   status,
   type,
   recurrence,
+  rollover,
   timezone,
   userId,
   startDate,
@@ -144,6 +148,7 @@ const createBudgetModel = async ({
     status: status || BUDGET_STATUSES.active,
     type: type || BUDGET_TYPES.manual,
     recurrence: recurrence ?? BUDGET_RECURRENCES.none,
+    rollover: rollover ?? BUDGET_ROLLOVERS.none,
     timezone: timezone ?? null,
     startDate: startDate || null,
     endDate: endDate || null,

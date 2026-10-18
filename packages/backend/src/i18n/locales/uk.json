@@ -113,7 +113,13 @@
     "notCategoryBudget": "Цей ендпоінт доступний тільки для бюджетів за категоріями",
     "exclusionsOnlyForCategoryBudgets": "Лише бюджети за категоріями мають зіставлені транзакції, які можна виключити. Натомість відв'яжіть транзакції від бюджету, що ведеться вручну",
     "recurringRequiresStartDate": "Для регулярних бюджетів потрібна дата початку",
-    "notRecurringBudget": "Цей ендпоінт доступний тільки для регулярних бюджетів"
+    "notRecurringBudget": "Цей ендпоінт доступний тільки для регулярних бюджетів",
+    "alerts": {
+      "nearLimitTitle": "«{{budgetName}}» наближається до ліміту",
+      "nearLimitMessage": "Ви використали {{percent}}% бюджету «{{budgetName}}»",
+      "overLimitTitle": "«{{budgetName}}» перевищує ліміт",
+      "overLimitMessage": "Ви використали {{percent}}% бюджету «{{budgetName}}»"
+    }
   },
   "tags": {
     "tagNotFound": "Тег не знайдено",

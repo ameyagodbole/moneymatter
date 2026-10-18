@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import InputField from '@/components/fields/input-field.vue';
 import Button from '@/components/lib/ui/button/Button.vue';
-import { BUDGET_RECURRENCES, BUDGET_TYPES, type BudgetModel, type BudgetRuleGroup } from '@bt/shared/types';
+import {
+  BUDGET_RECURRENCES,
+  BUDGET_ROLLOVERS,
+  BUDGET_TYPES,
+  type BudgetModel,
+  type BudgetRuleGroup,
+} from '@bt/shared/types';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
@@ -27,7 +33,12 @@ const formData = ref({
   limitAmount: null as number | null,
 });
 const rules = ref<BudgetRuleGroup[]>([]);
-const schedule = ref<BudgetSchedule>({ recurrence: BUDGET_RECURRENCES.none, startDate: null, endDate: null });
+const schedule = ref<BudgetSchedule>({
+  recurrence: BUDGET_RECURRENCES.none,
+  rollover: BUDGET_ROLLOVERS.none,
+  startDate: null,
+  endDate: null,
+});
 const isScheduleDirty = ref(false);
 const isCategoryBudget = computed(() => props.budget.type === BUDGET_TYPES.category);
 
@@ -40,6 +51,7 @@ const initFormData = () => {
   rules.value = getEditableRules({ budget: props.budget });
   schedule.value = {
     recurrence: props.budget.recurrence,
+    rollover: props.budget.rollover ?? BUDGET_ROLLOVERS.none,
     startDate: props.budget.startDate ? new Date(props.budget.startDate) : null,
     endDate: props.budget.endDate ? new Date(props.budget.endDate) : null,
   };

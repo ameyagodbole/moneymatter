@@ -1,4 +1,4 @@
-import { BUDGET_RECURRENCES } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_ROLLOVERS } from '@bt/shared/types';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 
@@ -22,4 +22,23 @@ export const useRecurrenceOptions = () => {
     recurrenceOptions.value.find((option) => option.value === value) ?? recurrenceOptions.value[0]!;
 
   return { recurrenceOptions, findRecurrenceOption };
+};
+
+export interface RolloverOption {
+  value: BUDGET_ROLLOVERS;
+  label: string;
+}
+
+/** Options for the "Carry over" select of recurring budgets. */
+export const useRolloverOptions = () => {
+  const { t } = useI18n();
+
+  const rolloverOptions = computed<RolloverOption[]>(() =>
+    Object.values(BUDGET_ROLLOVERS).map((value) => ({ value, label: t(`budgets.rollover.options.${value}`) })),
+  );
+
+  const findRolloverOption = (value: BUDGET_ROLLOVERS) =>
+    rolloverOptions.value.find((option) => option.value === value) ?? rolloverOptions.value[0]!;
+
+  return { rolloverOptions, findRolloverOption };
 };

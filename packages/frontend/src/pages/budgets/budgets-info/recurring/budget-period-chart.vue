@@ -256,15 +256,32 @@ const renderChart = () => {
     })
     .on('click', (_event: MouseEvent, p) => emit('select', { periodStart: p.periodStart }));
 
-  // The limit is the same every period, so it reads as one reference line. Drawn after
-  // the bars so an over-limit bar still shows where the limit sits.
-  const limitAmount = props.periods.find((p) => p.limitAmount !== null)?.limitAmount ?? null;
-  if (limitAmount !== null) {
+  const limits = props.periods.map((p) => p.limitAmount).filter((l): l is number => l !== null);
+  const limitsVary = new Set(limits).size > 1;
+
+  if (limitsVary) {
+    // Rollover gives each period its own limit: mark it on each bar.
+    g.selectAll('.limit-tick')
+      .data(props.periods.filter((p) => p.limitAmount !== null))
+      .enter()
+      .append('line')
+      .attr('class', 'limit-tick')
+      .attr('x1', (p) => (xScale(p.periodStart) ?? 0) + barOffset - 4)
+      .attr('x2', (p) => (xScale(p.periodStart) ?? 0) + barOffset + barWidth + 4)
+      .attr('y1', (p) => yScale(p.limitAmount!))
+      .attr('y2', (p) => yScale(p.limitAmount!))
+      .attr('stroke', AVERAGE_LINE_COLOR)
+      .attr('stroke-width', 2.5)
+      .attr('stroke-dasharray', '4,3')
+      .style('pointer-events', 'none');
+  } else if (limits.length) {
+    // The same limit every period reads as one reference line. Drawn after the bars so
+    // an over-limit bar still shows where the limit sits.
     renderAverageLine({
       g,
       innerWidth,
-      y: yScale(limitAmount),
-      label: `${t('budgets.recurring.limit')}: ${formatBaseCurrency(limitAmount)}`,
+      y: yScale(limits[0]!),
+      label: `${t('budgets.recurring.limit')}: ${formatBaseCurrency(limits[0]!)}`,
       labelBackground: card,
     });
   }

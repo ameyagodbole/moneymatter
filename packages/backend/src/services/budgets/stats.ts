@@ -8,6 +8,7 @@ import { authorizeBudgetRead } from './authorize-budget-access';
 import type { BudgetPeriod } from './utils/budget-periods';
 import { resolveBudgetWindow } from './utils/budget-window';
 import { type BudgetEntries, collectBudgetEntries } from './utils/collect-budget-entries';
+import { resolvePeriodLimits } from './utils/resolve-period-limits';
 
 interface StatsResponse {
   /** The period the totals cover, or null for one-off budgets. */
@@ -20,6 +21,10 @@ interface StatsResponse {
     transactionsCount: number;
     firstTransactionDate: string | null; // ISO date string of earliest transaction
     lastTransactionDate: string | null; // ISO date string of latest transaction
+    /** The limit this period is measured against: the base limit plus any rollover. Null without a limit. */
+    limitAmount: number | null;
+    /** What the previous period carried in (negative when overspending is taken off). */
+    rolledOverAmount: number;
   };
 }
 
@@ -31,6 +36,8 @@ const getEmptySummary = (): StatsResponse['summary'] => ({
   transactionsCount: 0,
   firstTransactionDate: null,
   lastTransactionDate: null,
+  limitAmount: null,
+  rolledOverAmount: 0,
 });
 
 /** Stats of a one-off budget with nothing counted. */
@@ -45,7 +52,13 @@ export const computeUtilizationRate = ({
   income: number;
   expense: number;
   limitAmount: number | null;
-}): number | null => (limitAmount === null ? null : (Math.max(0, expense - income) / limitAmount) * 100);
+}): number | null => {
+  if (limitAmount === null) return null;
+  const spent = Math.max(0, expense - income);
+  // Rollover of overspending can leave a period with no limit left: any spend is then all of it.
+  if (limitAmount <= 0) return spent > 0 ? 100 : 0;
+  return (spent / limitAmount) * 100;
+};
 
 /**
  * Totals over collected entries. Refund legs are subtracted from the side they net, so a
@@ -116,9 +129,19 @@ export const getBudgetStats = withTransaction(
       to,
     });
 
+    const limits = period
+      ? await resolvePeriodLimits({ budget, uptoIndex: period.index, ownerUserId, callerUserId: userId, isOwner })
+      : null;
+    const effective = limits?.[period!.index] ?? null;
+    const limitAmount = effective?.limit ?? budget.limitAmount?.toCents() ?? null;
+
     return {
       period,
-      summary: summarizeEntries({ ...collected, limitAmount: budget.limitAmount?.toCents() ?? null }),
+      summary: {
+        ...summarizeEntries({ ...collected, limitAmount }),
+        limitAmount,
+        rolledOverAmount: effective?.carriedIn ?? 0,
+      },
     };
   },
 );

@@ -1,11 +1,12 @@
 import { api } from '@/api/_api';
-import { BUDGET_RECURRENCES, BudgetModel, endpointsTypes } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_ROLLOVERS, BudgetModel, endpointsTypes } from '@bt/shared/types';
 
 interface editBudgetParamsParams {
   name?: string;
   limitAmount?: number;
   categoryIds?: string[];
   recurrence?: BUDGET_RECURRENCES;
+  rollover?: BUDGET_ROLLOVERS;
   timezone?: string | null;
   startDate?: string;
   /** `null` clears the end date, so a recurring budget repeats until archived. */
@@ -70,6 +71,10 @@ export interface StatsResponse {
     transactionsCount: number;
     firstTransactionDate: string | null; // ISO date string of earliest transaction
     lastTransactionDate: string | null; // ISO date string of latest transaction
+    /** The limit this period is measured against, rollover included. Null without a limit. */
+    limitAmount: number | null;
+    /** What the previous period carried in; negative when overspending was taken off. */
+    rolledOverAmount: number;
   };
 }
 

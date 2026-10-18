@@ -1,5 +1,6 @@
 import {
   BUDGET_RECURRENCES,
+  BUDGET_ROLLOVERS,
   BUDGET_TYPES,
   type BudgetRuleGroup,
   type RecordId,
@@ -23,6 +24,7 @@ interface EditBudgetPayload {
   userId: number;
   name?: string;
   recurrence?: BUDGET_RECURRENCES;
+  rollover?: BUDGET_ROLLOVERS;
   timezone?: string | null;
   startDate?: string;
   /** `null` clears the end date, so a recurring budget repeats until archived. */

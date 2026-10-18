@@ -1,4 +1,4 @@
-import { BUDGET_RECURRENCES } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_ROLLOVERS } from '@bt/shared/types';
 import { describe, expect, it } from 'vitest';
 
 import { buildBudgetEditPayload } from './build-budget-edit-payload';
@@ -50,13 +50,19 @@ describe('buildBudgetEditPayload', () => {
       const payload = buildBudgetEditPayload({
         ...baseValues,
         limitAmount: null,
-        schedule: { recurrence: BUDGET_RECURRENCES.monthly, startDate, endDate: null },
+        schedule: {
+          recurrence: BUDGET_RECURRENCES.monthly,
+          rollover: BUDGET_ROLLOVERS.surplus,
+          startDate,
+          endDate: null,
+        },
         timezone: 'Europe/Kyiv',
       });
 
       expect(payload).toEqual({
         ...baseValues,
         recurrence: BUDGET_RECURRENCES.monthly,
+        rollover: BUDGET_ROLLOVERS.surplus,
         timezone: 'Europe/Kyiv',
         startDate: '2026-01-25T00:00:00.000Z',
         endDate: null,
@@ -67,11 +73,17 @@ describe('buildBudgetEditPayload', () => {
       const payload = buildBudgetEditPayload({
         ...baseValues,
         limitAmount: null,
-        schedule: { recurrence: BUDGET_RECURRENCES.none, startDate, endDate: null },
+        schedule: { recurrence: BUDGET_RECURRENCES.none, rollover: BUDGET_ROLLOVERS.surplus, startDate, endDate: null },
         timezone: 'Europe/Kyiv',
       });
 
-      expect(payload).toEqual({ ...baseValues, recurrence: BUDGET_RECURRENCES.none, timezone: 'Europe/Kyiv' });
+      // A one-off budget has nothing to carry over, whatever the form held.
+      expect(payload).toEqual({
+        ...baseValues,
+        recurrence: BUDGET_RECURRENCES.none,
+        rollover: BUDGET_ROLLOVERS.none,
+        timezone: 'Europe/Kyiv',
+      });
     });
 
     it('leaves the schedule untouched when it was not edited', () => {

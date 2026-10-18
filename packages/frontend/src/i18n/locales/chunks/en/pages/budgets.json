@@ -191,6 +191,46 @@
     },
     "share": {
       "sharedByBadge": "Shared by {handle}"
+    },
+    "pace": {
+      "title": "Pace this period",
+      "paceLabel": "Pace",
+      "onPace": "On pace",
+      "aheadBy": "{amount} ahead of pace",
+      "behindBy": "{amount} under pace",
+      "expectedByNow": "Expected by now: {amount}",
+      "projectedLabel": "Projected for the period",
+      "projectedOver": "Over the limit at this rate",
+      "projectedWithin": "Within the limit at this rate",
+      "allowanceLabel": "Left to spend per day",
+      "daysLeft": "{count} day left | {count} days left"
+    },
+    "overview": {
+      "title": "This period",
+      "period": {
+        "monthly": "This month",
+        "quarterly": "This quarter",
+        "yearly": "This year"
+      },
+      "budgetsCount": "{count} budget | {count} budgets",
+      "ofLimit": "of {amount}",
+      "overLimitCount": "{count} budget over its limit | {count} budgets over their limit"
+    },
+    "rollover": {
+      "label": "Carry over",
+      "placeholder": "Choose what carries over",
+      "options": {
+        "none": "Nothing",
+        "surplus": "Unspent limit",
+        "all": "Unspent limit and overspending"
+      },
+      "hint": {
+        "none": "Each period starts with the same limit.",
+        "surplus": "Whatever you don't spend is added to the next period's limit.",
+        "all": "Whatever you don't spend is added to the next period's limit, and overspending is taken off it."
+      },
+      "includesCarried": "Includes {amount} carried over from last period",
+      "includesDeducted": "Reduced by {amount} overspent last period"
     }
   }
 }

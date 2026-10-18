@@ -242,6 +242,16 @@ export enum BUDGET_TYPES {
   category = 'category',
 }
 
+/**
+ * What a recurring budget carries into the next period. `surplus`: unspent limit adds to
+ * the next limit. `all`: overspending is taken off the next limit too.
+ */
+export enum BUDGET_ROLLOVERS {
+  none = 'none',
+  surplus = 'surplus',
+  all = 'all',
+}
+
 /** How often a budget resets. `none` is a one-off budget over its own date range. */
 export enum BUDGET_RECURRENCES {
   none = 'none',

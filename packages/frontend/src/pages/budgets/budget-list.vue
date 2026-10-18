@@ -13,6 +13,8 @@ import { useRouter } from 'vue-router';
 
 import BudgetCardSkeleton from './budget-card-skeleton.vue';
 import BudgetCard from './budget-list-cards/budget-card.vue';
+import { buildPeriodOverview } from './budget-period-overview';
+import BudgetPeriodOverview from './components/budget-period-overview.vue';
 import { formatBudgetTimeStatus, getBudgetTimeStatus } from './budget-time-status';
 
 const { t } = useI18n();
@@ -117,6 +119,9 @@ const sortBudgetsByStatus = (budgets: BudgetModel[]): BudgetModel[] => {
 };
 
 const sortedBudgets = computed(() => sortBudgetsByStatus(budgetsList.value || []));
+const periodOverview = computed(() =>
+  buildPeriodOverview({ budgets: budgetsList.value || [], getStats: getBudgetStats }),
+);
 </script>
 
 <template>
@@ -135,6 +140,8 @@ const sortedBudgets = computed(() => sortBudgetsByStatus(budgetsList.value || []
           {{ showArchived ? $t('budgets.list.hideArchived') : $t('budgets.list.showArchived') }}
         </button>
       </div>
+
+      <BudgetPeriodOverview :groups="periodOverview" />
 
       <div
         v-if="sortedBudgets.length === 0 && !isLoadingMore"

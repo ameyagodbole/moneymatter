@@ -13,14 +13,20 @@ import { ApiErrorResponseError } from '@/js/errors';
 import { trackAnalyticsEvent } from '@/lib/posthog';
 import { cn } from '@/lib/utils';
 import { useOnboardingStore } from '@/stores/onboarding';
-import { BUDGET_RECURRENCES, BUDGET_TYPES, type BudgetRuleGroup } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_ROLLOVERS, BUDGET_TYPES, type BudgetRuleGroup } from '@bt/shared/types';
 import { useMutation, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import BudgetRulesEditor from './components/budget-rules-editor.vue';
 import { createEmptyRule, getSavableRules } from './components/budget-rules';
-import { type RecurrenceOption, getBrowserTimezone, useRecurrenceOptions } from './use-recurrence-options';
+import {
+  type RecurrenceOption,
+  type RolloverOption,
+  getBrowserTimezone,
+  useRecurrenceOptions,
+  useRolloverOptions,
+} from './use-recurrence-options';
 
 const BUDGET_DEFAULT_VALUES: {
   id: string | null;
@@ -53,6 +59,8 @@ const form = ref({ ...BUDGET_DEFAULT_VALUES });
 const { recurrenceOptions, findRecurrenceOption } = useRecurrenceOptions();
 const recurrence = ref<RecurrenceOption>(findRecurrenceOption(BUDGET_RECURRENCES.none));
 const isRecurring = computed(() => recurrence.value.value !== BUDGET_RECURRENCES.none);
+const { rolloverOptions, findRolloverOption } = useRolloverOptions();
+const rollover = ref<RolloverOption>(findRolloverOption(BUDGET_ROLLOVERS.none));
 const rules = ref<BudgetRuleGroup[]>([createEmptyRule()]);
 const rulesFieldTouched = ref(false);
 
@@ -95,6 +103,7 @@ const submit = () =>
   createBudgetItem({
     ...(form.value as any),
     recurrence: recurrence.value.value,
+    rollover: isRecurring.value ? rollover.value.value : BUDGET_ROLLOVERS.none,
     timezone: getBrowserTimezone(),
     ...(isCategoryBudget.value && { rules: getSavableRules({ rules: rules.value }), categoryIds: undefined }),
     // Linking every transaction in a range up front only makes sense for a one-off budget.
@@ -198,6 +207,17 @@ const onBudgetTypeChange = (type: BUDGET_TYPES) => {
         :label="isRecurring ? $t('budgets.creation.endsOnLabel') : $t('budgets.creation.toDateLabel')"
         @update:model-value="(v: Date | undefined) => (form.endDate = v ?? null)"
       />
+    </div>
+
+    <div v-if="isRecurring">
+      <SelectField
+        :model-value="rollover"
+        :values="rolloverOptions"
+        :label="$t('budgets.rollover.label')"
+        :placeholder="$t('budgets.rollover.placeholder')"
+        @update:model-value="(option) => option && (rollover = option)"
+      />
+      <p class="text-muted-foreground mt-1.5 text-xs">{{ $t(`budgets.rollover.hint.${rollover.value}`) }}</p>
     </div>
 
     <div v-if="!isCategoryBudget && !isRecurring" class="flex gap-2">

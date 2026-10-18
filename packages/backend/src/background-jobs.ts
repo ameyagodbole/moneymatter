@@ -4,6 +4,7 @@ import { accountSyncWorker } from '@services/bank-data-providers/sync/account-sy
 
 import { attachmentsOrphanSweepCron } from './crons/attachments-orphan-sweep';
 import { balanceRevalueSweepCron } from './crons/balance-revalue-sweep';
+import { budgetAlertsCron } from './crons/budget-alerts-check';
 import { cryptoPricesSyncCron } from './crons/crypto-prices-sync';
 import { demoCleanupCron } from './crons/demo-cleanup';
 import { demoTemplateRefreshCron } from './crons/demo-template-refresh';
@@ -38,6 +39,7 @@ export function initializeBackgroundJobs() {
       securitiesDailySyncCron.startCron();
       cryptoPricesSyncCron.startCron();
       tagRemindersCron.startCron();
+      budgetAlertsCron.startCron();
       subscriptionRemindersCron.startCron();
       subscriptionAutoRecordCron.startCron();
       subscriptionCandidateDetectionCron.startCron();
@@ -56,6 +58,7 @@ export async function shutdownBackgroundJobs() {
   securitiesDailySyncCron.stopCron();
   cryptoPricesSyncCron.stopCron();
   tagRemindersCron.stopCron();
+  budgetAlertsCron.stopCron();
   subscriptionRemindersCron.stopCron();
   subscriptionAutoRecordCron.stopCron();
   subscriptionCandidateDetectionCron.stopCron();

@@ -1,4 +1,4 @@
-import { BUDGET_RECURRENCES, BUDGET_STATUSES, BUDGET_TYPES } from '@bt/shared/types';
+import { BUDGET_RECURRENCES, BUDGET_ROLLOVERS, BUDGET_STATUSES, BUDGET_TYPES } from '@bt/shared/types';
 import { recordId } from '@common/lib/zod/custom-types';
 import { Money } from '@common/types/money';
 import { isValidTimezone } from '@common/utils/zoned-time';
@@ -52,6 +52,12 @@ const inputSchema = {
     .describe(
       'How often the budget resets. none (default) is a one-off budget over its date range. For monthly/quarterly/yearly, startDate is required and its day anchors every period (e.g. the 25th → 25th–24th), limitAmount is per period, and endDate is optional (omit to repeat until archived).',
     ),
+  rollover: z
+    .enum([BUDGET_ROLLOVERS.none, BUDGET_ROLLOVERS.surplus, BUDGET_ROLLOVERS.all])
+    .optional()
+    .describe(
+      'Recurring budgets with a limit: what carries into the next period. surplus adds unspent limit to the next period; all also takes overspending off it. Default: none',
+    ),
   timezone: z
     .string()
     .refine((timezone) => isValidTimezone({ timezone }), { message: 'Unknown IANA timezone' })
@@ -90,6 +96,7 @@ export function registerCreateBudget(server: McpServer) {
         categoryIds: args.categoryIds,
         rules: args.rules,
         recurrence: args.recurrence,
+        rollover: args.rollover,
         timezone: args.timezone,
         startDate: args.startDate ? new Date(args.startDate) : undefined,
         endDate: args.endDate ? new Date(args.endDate) : undefined,

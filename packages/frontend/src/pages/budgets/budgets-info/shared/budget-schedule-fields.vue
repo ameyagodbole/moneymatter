@@ -5,7 +5,7 @@ import { BUDGET_RECURRENCES } from '@bt/shared/types';
 import { format } from 'date-fns';
 import { computed } from 'vue';
 
-import { useRecurrenceOptions } from '../../use-recurrence-options';
+import { useRecurrenceOptions, useRolloverOptions } from '../../use-recurrence-options';
 import type { BudgetSchedule } from '../build-budget-edit-payload';
 
 const props = defineProps<{
@@ -18,6 +18,8 @@ const emit = defineEmits<{
 }>();
 
 const { recurrenceOptions, findRecurrenceOption } = useRecurrenceOptions();
+const { rolloverOptions, findRolloverOption } = useRolloverOptions();
+const selectedRollover = computed(() => findRolloverOption(props.modelValue.rollover));
 
 const isRecurring = computed(() => props.modelValue.recurrence !== BUDGET_RECURRENCES.none);
 const selectedOption = computed(() => findRecurrenceOption(props.modelValue.recurrence));
@@ -59,6 +61,18 @@ const formatDate = (date: Date | null) => (date ? format(date, 'MMM d, yyyy') : 
         :disabled="disabled"
         @update:model-value="(v: Date | undefined) => update({ endDate: v ?? null })"
       />
+    </div>
+
+    <div v-if="isRecurring">
+      <SelectField
+        :model-value="selectedRollover"
+        :values="rolloverOptions"
+        :label="$t('budgets.rollover.label')"
+        :placeholder="$t('budgets.rollover.placeholder')"
+        :disabled="disabled"
+        @update:model-value="(option) => option && update({ rollover: option.value })"
+      />
+      <p class="text-muted-foreground mt-1.5 text-xs">{{ $t(`budgets.rollover.hint.${modelValue.rollover}`) }}</p>
     </div>
 
     <div v-else class="grid grid-cols-2 gap-3">

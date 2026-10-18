@@ -1,3 +1,4 @@
+import { BUDGET_ROLLOVERS } from '@bt/shared/types';
 import { findOrThrowNotFound } from '@common/utils/find-or-throw-not-found';
 import { t } from '@i18n/index';
 import { ValidationError } from '@js/errors';
@@ -17,6 +18,7 @@ import {
   listCumulativeStepStarts,
 } from './utils/budget-periods';
 import { type BudgetEntries, collectBudgetEntries } from './utils/collect-budget-entries';
+import { getFirstPeriodStart, resolvePeriodLimits } from './utils/resolve-period-limits';
 
 export interface BudgetPeriodTotals {
   index: number;
@@ -183,7 +185,10 @@ export const getBudgetPeriods = async ({
   const current = periods[periods.length - 1]!;
   const previous =
     current.index > 0 ? getBudgetPeriodByIndex({ budget: recurringFields, index: current.index - 1 }) : null;
-  const rangeStart = previous && previous.start < periods[0]!.start ? previous.start : periods[0]!.start;
+  const firstListed = previous && previous.start < periods[0]!.start ? previous.start : periods[0]!.start;
+  // Rollover makes each limit depend on every period before it, so collect from the first one.
+  const withRollover = budget.rollover !== BUDGET_ROLLOVERS.none && budget.limitAmount !== null;
+  const rangeStart = withRollover ? (getFirstPeriodStart({ budget }) ?? firstListed) : firstListed;
 
   const collected = await collectBudgetEntries({
     budget,
@@ -195,13 +200,22 @@ export const getBudgetPeriods = async ({
   });
 
   const amounts = toSignedAmounts(collected);
-  const limitAmount = budget.limitAmount?.toCents() ?? null;
+  const limits = await resolvePeriodLimits({
+    budget,
+    uptoIndex: current.index,
+    ownerUserId,
+    callerUserId: userId,
+    isOwner,
+    collected,
+  });
   const granularity = CUMULATIVE_GRANULARITY[recurringFields.recurrence];
   const now = new Date();
 
   return {
     recurrence: recurringFields.recurrence,
-    periods: periods.map((period) => totalsForPeriod({ period, amounts, limitAmount })),
+    periods: periods.map((period) =>
+      totalsForPeriod({ period, amounts, limitAmount: limits?.[period.index]?.limit ?? null }),
+    ),
     cumulative: {
       granularity,
       current: cumulativeForPeriod({ period: current, amounts, granularity, timezone: budget.timezone, now }),
