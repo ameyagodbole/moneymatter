@@ -76,9 +76,9 @@
         "startsTomorrow": "Starts tomorrow",
         "startsInDays": "Starts in {count} days"
       },
-      "income": "Income",
-      "expenses": "Expenses",
-      "net": "Net",
+      "netSpend": "Net spend",
+      "limitLeft": "Limit left",
+      "overLimit": "Over limit",
       "used": "Used",
       "archive": "Archive",
       "unarchive": "Unarchive",
@@ -100,6 +100,8 @@
       "limit": "Limit",
       "used": "Used",
       "overLimit": "Over limit",
+      "limitLeft": "Limit left",
+      "overLimitBy": "Over the limit by",
       "loadError": "Couldn't load this budget's periods",
       "spentThisPeriod": "Spent this period",
       "vsPreviousPeriod": "vs previous period",
@@ -203,7 +205,8 @@
       "projectedLabel": "Projected for the period",
       "projectedOver": "Over the limit at this rate",
       "projectedWithin": "Within the limit at this rate",
-      "allowanceLabel": "Left to spend per day",
+      "remainingLabel": "Left for the rest of the period",
+      "overLabel": "Over the limit by",
       "daysLeft": "{count} day left | {count} days left"
     },
     "overview": {
@@ -234,35 +237,13 @@
       "includesDeducted": "Reduced by {amount} overspent last period"
     },
     "fit": {
-      "title": "Does the limit fit?",
+      "historyTitle": "Past periods",
       "noHistory": "No finished periods with a limit yet.",
-      "onLimit": "On the limit",
-      "overBy": "{percent}% over",
-      "underBy": "{percent}% under",
       "overLabel": "Over by",
       "underLabel": "Under by",
-      "periodTooltip": "{period}: spent {spent} of {limit} ({difference})",
       "withinLimit": "Within the limit",
       "withinCount": "{within} of {total} periods",
-      "averageUsage": "Average use of the limit",
-      "verdict": {
-        "insufficient": {
-          "title": "Not enough history yet",
-          "description": "After {count} finished periods you'll see whether this limit fits your spending."
-        },
-        "tooTight": {
-          "title": "This limit looks too tight",
-          "description": "You went over in {over} of {total} periods. A limit of {limit} would have covered 4 in 5 of them."
-        },
-        "realistic": {
-          "title": "This limit looks realistic",
-          "description": "Your spending mostly stays within it, without leaving much unused."
-        },
-        "roomy": {
-          "title": "This limit has room to spare",
-          "description": "You never reached it. A limit of {limit} would still have covered 4 in 5 periods."
-        }
-      }
+      "averageUsage": "Average use of the limit"
     }
   }
 }

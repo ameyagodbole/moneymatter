@@ -11,8 +11,8 @@ export interface BudgetPace {
   projectedSpent: number;
   /** Days left including today. */
   daysLeft: number;
-  /** What's left of the limit per remaining day, or 0 once it's used up. */
-  dailyAllowance: number;
+  /** What's left of the limit for the rest of the period; negative once it's exceeded. */
+  remaining: number;
 }
 
 /**
@@ -46,6 +46,6 @@ export const computeBudgetPace = ({
     paceDelta: spent - expectedSpent,
     projectedSpent: elapsedRatio > 0 ? spent / elapsedRatio : spent,
     daysLeft,
-    dailyAllowance: Math.max(0, limit - spent) / daysLeft,
+    remaining: limit - spent,
   };
 };

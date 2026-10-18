@@ -12,8 +12,9 @@ import { useQuery } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-import BudgetFitCard from './budget-fit-card.vue';
-import { computeBudgetFit } from './budget-fit';
+import LimitHistoryCard from './limit-history-card.vue';
+import { getLimitLeft } from '../../budget-limit-left';
+import { computeLimitHistory } from './limit-history';
 import BudgetPaceCard from './budget-pace-card.vue';
 import { computeBudgetPace } from './budget-pace';
 import BudgetPeriodChart from './budget-period-chart.vue';
@@ -86,6 +87,10 @@ const { data: previousSpending, isLoading: isLoadingPreviousSpending } = useQuer
   staleTime: QUERY_CACHE_STALE_TIME.ANALYTICS,
 });
 
+const limitLeft = computed(() =>
+  selected.value ? getLimitLeft({ limit: selected.value.limitAmount, netSpend: selected.value.spent }) : null,
+);
+
 const spentChange = computed(() =>
   selected.value && previous.value
     ? getPercentChange({ current: selected.value.spent, previous: previous.value.spent })
@@ -132,8 +137,8 @@ const pace = computed(() =>
     : null,
 );
 
-// Over / under per finished period, and whether the limit matches real spending.
-const fit = computed(() => computeBudgetFit({ periods: periods.value }));
+// How finished periods compared with their limits.
+const limitHistory = computed(() => computeLimitHistory({ periods: periods.value }));
 const hasAnyLimit = computed(() => periods.value.some((period) => period.limitAmount !== null));
 
 const selectPeriod = ({ periodStart }: { periodStart: string }) => emit('update:at', new Date(periodStart));
@@ -147,9 +152,9 @@ const selectPeriod = ({ periodStart }: { periodStart: string }) => emit('update:
 
     <template v-else>
       <!-- Summary Cards -->
-      <div class="grid grid-cols-1 gap-4 @md/recurring:grid-cols-3">
+      <div class="grid grid-cols-2 gap-4 @2xl/recurring:grid-cols-4">
         <template v-if="isLoadingPeriods">
-          <SummaryCardSkeleton v-for="n in 3" :key="n" title-width="w-24" value-width="w-28" />
+          <SummaryCardSkeleton v-for="n in 4" :key="n" title-width="w-24" value-width="w-28" />
         </template>
         <template v-else-if="selected">
           <SummaryCard
@@ -169,12 +174,21 @@ const selectPeriod = ({ periodStart }: { periodStart: string }) => emit('update:
             :value="0"
             :value-label="selected.utilizationRate === null ? '—' : `${Math.round(selected.utilizationRate)}%`"
           />
+          <SummaryCard
+            :title="
+              limitLeft !== null && limitLeft < 0
+                ? t('budgets.recurring.overLimitBy')
+                : t('budgets.recurring.limitLeft')
+            "
+            :value="Math.abs(limitLeft ?? 0)"
+            :value-label="limitLeft === null ? '—' : undefined"
+          />
         </template>
       </div>
 
       <BudgetPaceCard v-if="pace && selected?.limitAmount" :pace="pace" :limit="selected.limitAmount" />
 
-      <BudgetFitCard v-if="!isLoadingPeriods && hasAnyLimit" :fit="fit" :recurrence="recurrence" />
+      <LimitHistoryCard v-if="!isLoadingPeriods && hasAnyLimit" :history="limitHistory" />
 
       <!-- Spending per period against the limit -->
       <ChartSkeleton v-if="isLoadingPeriods" />

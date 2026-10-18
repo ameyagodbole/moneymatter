@@ -64,8 +64,19 @@ const isProjectedOver = computed(() => props.pace.projectedSpent > props.limit);
       </div>
 
       <div>
-        <div class="text-muted-foreground text-xs">{{ $t('budgets.pace.allowanceLabel') }}</div>
-        <div class="mt-1 text-lg font-semibold tabular-nums">{{ formatBaseCurrency(pace.dailyAllowance) }}</div>
+        <div class="text-muted-foreground text-xs">
+          {{ pace.remaining < 0 ? $t('budgets.pace.overLabel') : $t('budgets.pace.remainingLabel') }}
+        </div>
+        <div
+          :class="
+            cn(
+              'mt-1 text-lg font-semibold tabular-nums',
+              pace.remaining < 0 ? 'text-app-expense-color' : 'text-success-text',
+            )
+          "
+        >
+          {{ formatBaseCurrency(Math.abs(pace.remaining)) }}
+        </div>
         <div class="text-muted-foreground mt-0.5 text-xs">
           {{ $t('budgets.pace.daysLeft', pace.daysLeft) }}
         </div>

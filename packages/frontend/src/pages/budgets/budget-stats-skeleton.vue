@@ -3,15 +3,23 @@ import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
 
-defineProps<{
-  showUtilization?: boolean;
-}>();
+withDefaults(
+  defineProps<{
+    showUtilization?: boolean;
+    /** Number of stat columns to stand in for. */
+    columns?: number;
+  }>(),
+  { showUtilization: false, columns: 3 },
+);
 </script>
 
 <template>
   <!-- Stats skeleton -->
-  <div class="border-border/50 mt-auto grid grid-cols-3 gap-2 border-t pt-3">
-    <div v-for="i in 3" :key="i">
+  <div
+    class="border-border/50 mt-auto grid gap-2 border-t pt-3"
+    :style="{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }"
+  >
+    <div v-for="i in columns" :key="i">
       <div class="bg-muted mb-1 h-3 w-12 animate-pulse rounded" />
       <div class="bg-muted h-5 w-16 animate-pulse rounded" />
     </div>

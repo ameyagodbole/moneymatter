@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { ArchiveIcon, ArrowRightIcon, CalendarIcon, RepeatIcon, TagsIcon, WalletIcon } from '@lucide/vue';
 import { computed } from 'vue';
 
+import { getLimitLeft, getNetSpend } from '../budget-limit-left';
 import BudgetStatsSkeleton from '../budget-stats-skeleton.vue';
 import BudgetCardDropdown from './shared/budget-card-dropdown.vue';
 import BudgetCardStats from './shared/budget-card-stats.vue';
@@ -39,6 +40,14 @@ const categories = computed(() => (props.budget.categories ?? []) as CategoryMod
 const rulesCount = computed(() => props.budget.rules?.length ?? 0);
 // Several rules, or rules with no categories (tags, accounts, payees), read better as a rule count.
 const showRulesCount = computed(() => rulesCount.value > 1 || (rulesCount.value > 0 && !categories.value.length));
+
+const netSpend = computed(() =>
+  getNetSpend({ expense: summary.value?.actualExpense ?? 0, income: summary.value?.actualIncome ?? 0 }),
+);
+// The period's own limit (rollover included) when stats have it, else the budget's base limit.
+const limitLeft = computed(() =>
+  getLimitLeft({ limit: summary.value?.limitAmount ?? props.budget.limitAmount, netSpend: netSpend.value }),
+);
 
 const formatDate = (date: Date | string | undefined | null) => {
   if (!date) return null;
@@ -193,13 +202,13 @@ const formatDate = (date: Date | string | undefined | null) => {
       </div>
 
       <!-- Stats -->
-      <BudgetStatsSkeleton v-if="isStatsLoading" :show-utilization="!!budget.limitAmount" />
+      <BudgetStatsSkeleton
+        v-if="isStatsLoading"
+        :columns="budget.limitAmount ? 2 : 1"
+        :show-utilization="!!budget.limitAmount"
+      />
       <template v-else>
-        <BudgetCardStats
-          :income="summary?.actualIncome ?? 0"
-          :expense="summary?.actualExpense ?? 0"
-          :balance="summary?.balance ?? 0"
-        />
+        <BudgetCardStats :net-spend="netSpend" :limit-left="limitLeft" />
         <BudgetCardUtilization v-if="budget.limitAmount" :utilization-rate="summary?.utilizationRate ?? 0" />
       </template>
     </div>

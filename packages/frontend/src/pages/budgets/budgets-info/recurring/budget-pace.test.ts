@@ -16,15 +16,15 @@ describe('computeBudgetPace', () => {
     expect(pace.projectedSpent).toBeCloseTo(600, -1);
   });
 
-  it('spreads what is left over the remaining days, today included', () => {
+  it('gives what is left of the limit and the days left, today included', () => {
     const pace = computeBudgetPace({ ...period, spent: 200, limit: 500, now: midMonth })!;
 
     expect(pace.daysLeft).toBe(16);
-    expect(pace.dailyAllowance).toBeCloseTo(300 / 16, 5);
+    expect(pace.remaining).toBe(300);
   });
 
-  it('has no allowance left once the limit is used up', () => {
-    expect(computeBudgetPace({ ...period, spent: 700, limit: 500, now: midMonth })!.dailyAllowance).toBe(0);
+  it('goes negative once the limit is exceeded', () => {
+    expect(computeBudgetPace({ ...period, spent: 700, limit: 500, now: midMonth })!.remaining).toBe(-200);
   });
 
   it('is null without a positive limit or outside the period', () => {
