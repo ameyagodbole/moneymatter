@@ -186,7 +186,13 @@ const routes: RouteRecordRaw[] = [
             name: ROUTES_NAMES.plannedBudgetDetails,
             component: () => import('@/pages/budgets/budgets-info/index.vue'),
             meta: {
-              i18nChunks: ['pages/budgets', 'pages/budget-details', 'pages/transactions'] as I18nChunkName[],
+              // `pages/analytics`: recurring budgets reuse the Trends charts and their strings.
+              i18nChunks: [
+                'pages/budgets',
+                'pages/budget-details',
+                'pages/transactions',
+                'pages/analytics',
+              ] as I18nChunkName[],
             },
           },
         ],
